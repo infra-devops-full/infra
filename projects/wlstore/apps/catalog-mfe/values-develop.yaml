@@ -1,3 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 image:
   tag: sha-233540f
+ingress:
+  host: develop.wlstore.local # mesmo host do shell; o Ingress manda /catalog para cá

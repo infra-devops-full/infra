@@ -1,3 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
   tag: sha-cff4b79
+ingress:
+  host: prod.wlstore.local # domínio único do projeto: o shell em /, cada mfe no seu basePath

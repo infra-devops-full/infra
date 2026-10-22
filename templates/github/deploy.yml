@@ -2,8 +2,7 @@
 # Template de CI/CD (GitOps) para repositórios de aplicação.
 # Copie para <repo-do-app>/.github/workflows/deploy.yml e ajuste:
 #   - env.INFRA_PROJECT     pasta do projeto em projects/ no repo de infra
-#   - matrix.include        uma entrada por app (= pasta projects/<p>/apps/<app>)
-#   - env.APPS              os mesmos nomes de matrix.include[].app
+#   - APPS_JSON (job plan)  um item por app (= pasta projects/<p>/apps/<app>)
 #
 # Fluxo de branches → ambientes:
 #   feature/*  ──PR──►  develop  ──PR──►  main
@@ -12,12 +11,16 @@
 #   (validação)         + deploy em      + deploy em
 #                         develop           prod
 #
+# Só os apps AFETADOS pelo push são buildados e deployados (campo `paths` de
+# cada app). Assim, com várias equipes no mesmo repo, o push de uma não
+# rebuilda nem redeploya o app das outras. Buildam TODOS: workflow_dispatch,
+# primeiro push de uma branch e mudanças em .github/workflows/.
+#
 # Deploy = commit no REPO DE INFRA trocando image.tag em
 #   projects/<INFRA_PROJECT>/apps/<app>/values-<env>.yaml
 # e o ArgoCD faz o rollout no namespace <projeto>-<env>.
 #
-# Secret necessário no repo do app (criado por scripts/github-bootstrap.sh
-# do repo de infra):
+# Secret necessário no repo do app (criado por `make github` no repo de infra):
 #   INFRA_DEPLOY_KEY  chave SSH privada; a pública está no repo de infra como
 #                     deploy key com escrita.
 # =============================================================================
@@ -45,22 +48,74 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decide quais apps buildar a partir dos arquivos alterados.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      apps: ${{ steps.plan.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        env:
+          # app:        nome da pasta em projects/<p>/apps/ (vira o nome da imagem)
+          # context:    contexto do docker build
+          # dockerfile: caminho do Dockerfile
+          # build-args: opcional, linhas KEY=valor separadas por \n
+          # paths:      prefixos de caminho que, se alterados, rebuildam o app
+          #             (inclua as libs compartilhadas que ele usa)
+          APPS_JSON: |
+            [
+              {
+                "app": "my-app",
+                "context": "./my-app",
+                "dockerfile": "./my-app/Dockerfile",
+                "build-args": "",
+                "paths": ["my-app/"]
+              }
+            ]
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          apps = json.loads(os.environ["APPS_JSON"])
+          base = os.environ.get("PR_BASE") or os.environ.get("BEFORE") or ""
+          changed = None  # None = buildar todos
+          if os.environ["EVENT"] != "workflow_dispatch" and base and set(base) != {"0"}:
+              try:
+                  changed = subprocess.check_output(
+                      ["git", "diff", "--name-only", base, os.environ["GITHUB_SHA"]], text=True
+                  ).split()
+              except subprocess.CalledProcessError:
+                  changed = None
+          if changed is not None and any(f.startswith(".github/workflows/") for f in changed):
+              changed = None
+          def affected(a):
+              return changed is None or any(f.startswith(p) for f in changed for p in a["paths"])
+          selected = [{k: v for k, v in a.items() if k != "paths"} for a in apps if affected(a)]
+          names = " ".join(a["app"] for a in selected)
+          print("arquivos alterados:", "todos" if changed is None else len(changed))
+          print("apps afetados:", names or "nenhum")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("matrix=" + json.dumps({"include": selected}) + "\n")
+              out.write("apps=" + names + "\n")
+          PY
+
   build:
+    needs: plan
+    if: needs.plan.outputs.apps != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
-      matrix:
-        include:
-          # app:        nome da pasta em projects/<p>/apps/ (vira o nome da imagem)
-          # context:    contexto do docker build
-          # dockerfile: caminho do Dockerfile
-          # build-args: opcional, uma linha KEY=valor por argumento
-          - app: my-app
-            context: ./my-app
-            dockerfile: ./my-app/Dockerfile
-            build-args: ""
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -97,7 +152,7 @@ jobs:
           context: ${{ matrix.context }}
           platforms: ${{ env.PUBLISH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           file: ${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build-args }}
+          build-args: ${{ matrix['build-args'] }}
           push: ${{ env.PUBLISH == 'true' }}
           tags: |
             ${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }}
@@ -106,20 +161,21 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
   deploy:
-    needs: build
-    if: github.event_name != 'pull_request'
+    needs: [plan, build]
+    if: github.event_name != 'pull_request' && needs.plan.outputs.apps != ''
     runs-on: ubuntu-latest
     # Evita dois pushes simultâneos no repo de infra.
     concurrency: infra-${{ github.repository }}
     env:
-      APPS: my-app                       # mesmos nomes de matrix.include[].app
+      # Só os apps buildados neste run — os outros mantêm a tag atual.
+      APPS: ${{ needs.plan.outputs.apps }}
     steps:
       - name: Confere o INFRA_DEPLOY_KEY
         env:
           INFRA_DEPLOY_KEY: ${{ secrets.INFRA_DEPLOY_KEY }}
         run: |
           if [ -z "$INFRA_DEPLOY_KEY" ]; then
-            echo "::error title=INFRA_DEPLOY_KEY ausente::Rode no repo de infra: ./scripts/github-bootstrap.sh ${INFRA_PROJECT}  — ele cria a deploy key em ${INFRA_REPO} e o secret INFRA_DEPLOY_KEY neste repo. A imagem já foi publicada; só a atualização da tag ficou pendente."
+            echo "::error title=INFRA_DEPLOY_KEY ausente::Rode no repo de infra: make github PROJECT=${INFRA_PROJECT}  — ele cria a deploy key em ${INFRA_REPO} e o secret INFRA_DEPLOY_KEY neste repo. A imagem já foi publicada; só a atualização da tag ficou pendente."
             exit 1
           fi
 

@@ -6,7 +6,7 @@
 # imagem:
 #
 #   docker build --build-arg APP=shell --build-arg PORT=3000 \
-#     --build-arg BUILD_ENV="BLOG_URL=http://catalog-mfe:4200" -t shell .
+#     --build-arg BUILD_ENV="NEXT_PUBLIC_API_URL=http://catalog-service:8081" -t shell .
 #
 # BUILD_ENV: variáveis que o Next lê no BUILD (rewrites do next.config,
 # NEXT_PUBLIC_*), separadas por espaço. Elas ficam embutidas na imagem — use

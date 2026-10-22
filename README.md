@@ -49,6 +49,12 @@ Cada arquivo `apps/<app>/values-<env>.yaml` no Git **é** um deploy:
 | Host | `develop.crivo-be.crivo.local` (ou `ingress.host` dos values) |
 | Release / Service | `crivo-be` |
 
+**Convenção de domínio:** o front de cada projeto fica no domínio do projeto,
+`<env>.<projeto>.local` (`ingress.host` no `values-<env>.yaml`), e as APIs no
+host derivado. Exemplo: `develop.crivo.local` (front) e
+`develop.crivo-be.crivo.local` (API). Com microfrontends, todos dividem o
+domínio do projeto, um path por mfe (veja 4.5).
+
 Novo app, novo ambiente ou novo projeto = novos arquivos em `projects/`, um
 commit e um push. O ArgoCD encontra sozinho. Nada em `argocd/`, `charts/` ou
 `k8s/` muda.
@@ -59,7 +65,7 @@ Projetos incluídos:
 | ------- | ---- | ------------ |
 | [`crivo`](projects/crivo) | `crivo-be` (NestJS, :8080), `crivo-fe` (Next.js, :3000) | Postgres, Redis |
 | [`nest-rabbitmq`](projects/nest-rabbitmq) | `products` (NestJS, :3000) | RabbitMQ |
-| [`wlstore`](projects/wlstore) | `catalog-service` (Spring, :8081), `pricing-service` (Spring, :8082), `shell` (Next.js, :3000), `catalog-mfe` (Next.js, :4200) | Postgres (um banco por serviço), RabbitMQ |
+| [`wlstore`](projects/wlstore) | `catalog-service` (Spring, :8081), `pricing-service` (Spring, :8082), `shell` (Next.js, :3000), `catalog-mfe` (Next.js, :4200), `pricing-mfe` (Next.js, :4300) | Postgres (um banco por serviço), RabbitMQ |
 
 ---
 
@@ -150,9 +156,9 @@ Campos do `deploy.yml` de cada app (não são secrets):
 | ----- | --------------- |
 | `INFRA_REPO` | `infra-devops-full/infra` |
 | `INFRA_PROJECT` | `crivo` |
-| `matrix.include[]` | `app`, `context`, `dockerfile`, `build-args` por app |
-| `matrix.include[].build-args` | `NEXT_PUBLIC_API_URL=http://crivo-be:8080` |
-| `APPS` | `crivo-be crivo-fe` |
+| `APPS_JSON` (job `plan`) | um item por app: `app`, `context`, `dockerfile`, `build-args`, `paths` |
+| `build-args` | `NEXT_PUBLIC_API_URL=http://crivo-be:8080` (várias: separe com `\n`) |
+| `paths` | prefixos que, se alterados, rebuildam o app (inclua libs compartilhadas) |
 | `DEPLOY_ENV` | calculado: `develop` na branch develop, `prod` na main |
 
 ### 2.3 Token do GHCR (só para imagens privadas)
@@ -190,7 +196,7 @@ Variáveis de cada projeto atual:
 | crivo / crivo-fe | `PORT`, `NODE_ENV` | — | — (a URL da API é embutida no build: `NEXT_PUBLIC_API_URL=http://crivo-be:8080`) |
 | nest-rabbitmq / products | `PORT`, `NODE_ENV` | — | `RABBITMQ_URL`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
 | wlstore / catalog-service, pricing-service | `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, montadas com `$(VAR)` (veja abaixo) | — | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
-| wlstore / shell, catalog-mfe | — | — | — (o `shell` acha o `catalog-mfe` por `BLOG_URL=http://catalog-mfe:4200`, embutido no build) |
+| wlstore / shell, catalog-mfe, pricing-mfe | — | — | — (o roteamento `/` → shell, `/catalog` → catalog-mfe e `/pricing` → pricing-mfe é feito pelo Ingress; veja 4.5) |
 
 **Apps que esperam nomes próprios de variável (ex.: Spring).** Monte a variável
 no `env:` do values a partir das chaves dos Secrets, com `$(VAR)`. O Kubernetes
@@ -300,8 +306,9 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
 
 1. Copie o Dockerfile para a pasta do app e o `deploy.yml` para
    `.github/workflows/`.
-2. No `deploy.yml`, ajuste `INFRA_PROJECT`, `matrix.include` (uma entrada por
-   app: `app`, `context`, `dockerfile`, `build-args`) e `APPS`.
+2. No `deploy.yml`, ajuste `INFRA_PROJECT` e o `APPS_JSON` do job `plan`
+   (um item por app: `app`, `context`, `dockerfile`, `build-args` e `paths`).
+   O CI builda e faz deploy **só dos apps cujos `paths` mudaram** no push.
 3. Coloque o `appRepo` no `projects/<p>/project.yaml` e rode, **neste** repo:
    ```bash
    make github PROJECT=<p>     # develop + INFRA_DEPLOY_KEY + proteção da main
@@ -362,6 +369,66 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
   aplica.
 - **Neste repo de infra** não há branch por ambiente: os dois ambientes são
   arquivos (`values-develop.yaml` / `values-prod.yaml`) na `main`.
+
+### 4.5 Vários times no mesmo projeto (microfrontends e microsserviços)
+
+Exemplo real: [`projects/wlstore`](projects/wlstore). Cada time cuida do seu app
+e publica sem depender dos outros.
+
+**Front: um host, um path por microfrontend (Next.js Multi-Zones).** Quem
+roteia é o NGINX Ingress, não o shell:
+
+```
+develop.wlstore.local/           → shell        (ingress.path: /)
+develop.wlstore.local/catalog/*  → catalog-mfe  (ingress.path: /catalog)  ↔ catalog-service
+develop.wlstore.local/pricing/*  → pricing-mfe  (ingress.path: /pricing)  ↔ pricing-service
+develop.wlstore.local/<x>/*      → <x>-mfe      (próximo time)
+```
+
+| Regra | Onde |
+| ----- | ---- |
+| todos os fronts usam o **mesmo** `ingress.host` | `apps/<app>/values-<env>.yaml` |
+| cada mfe tem `ingress.path` == `basePath` do `next.config.js`, único no projeto | `apps/<mfe>/values.yaml` + código do mfe |
+| o shell **não** faz proxy nem conhece os mfes no build (só links `<a href="/catalog">`) | `next.config.js` do shell: `rewrites` só em `nx dev` |
+| todo mfe entra no registro da navegação (`key`, `label`, `basePath`) | `packages/ui/src/lib/registry.ts` |
+| porta local única por mfe (4200, 4300, 4400…), só para `nx dev` | `project.json` do mfe + lista do `next.config.js` do shell |
+| layout comum (header, design system) vem de um pacote compartilhado | `packages/ui` do monorepo |
+
+Para um time publicar um mfe novo:
+
+1. **No repo do app:** crie o app no Nx com um `basePath` único (ex.:
+   `/checkout`) e uma porta local livre, registre-o em `registry.ts`, na lista
+   do `next.config.js` do shell e no `dependsOn` do `shell:dev`, e adicione o
+   item dele no `APPS_JSON` do `deploy.yml`. O passo a passo detalhado está no
+   README do front do wlstore.
+2. **Neste repo:** crie `projects/<p>/apps/checkout-mfe/`, com `values.yaml`
+   (`ingress.path: /checkout` e as probes em `/checkout`) e
+   `values-<env>.yaml` (`ingress.host` igual ao do shell). Faça commit e push.
+3. O ApplicationSet cria `<p>-checkout-mfe-<env>` sozinho. Não há rebuild do
+   shell nem de outros mfes.
+
+Trade-off: navegar entre mfes (de `/` para `/catalog`) recarrega a página.
+Dentro do mesmo mfe, a navegação continua client-side. Por ser o mesmo
+domínio, os cookies de sessão valem para todos.
+
+**Back: um serviço = um app = uma Application.** Cada serviço tem imagem, tag,
+rollback e métricas próprios. Um banco por serviço vem de `extraDbs`, e os
+eventos passam pelo RabbitMQ.
+
+**CI por app.** O job `plan` compara os arquivos alterados com o `paths` de
+cada app e builda e faz deploy só dos afetados. Um push do time de catálogo
+não redeploya o shell.
+
+**Revisão por time (opcional).** Um `CODEOWNERS` por pasta faz o PR pedir a
+revisão certa:
+
+```
+# repo do app:  .github/CODEOWNERS
+/wlstore-fe/apps/catalog-mfe/    @org/time-catalogo
+/wlstore-be/pricing-service/     @org/time-precos
+# repo de infra: .github/CODEOWNERS
+/projects/wlstore/apps/catalog-mfe/   @org/time-catalogo
+```
 
 ## 5. Comandos
 

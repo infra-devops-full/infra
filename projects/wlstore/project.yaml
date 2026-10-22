@@ -4,11 +4,14 @@
 # Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
 #   apps/catalog-service/  Spring Boot (porta 8081, banco catalogdb, Flyway)
 #   apps/pricing-service/  Spring Boot (porta 8082, banco pricingdb, Flyway)
-#   apps/shell/            Next.js host (porta 3000, proxy /blog → catalog-mfe)
-#   apps/catalog-mfe/      Next.js microfrontend (porta 4200, basePath /blog)
+#   apps/shell/            Next.js host (porta 3000, em / do host do projeto)
+#   apps/catalog-mfe/      Next.js microfrontend (porta 4200, em /catalog do mesmo host)
+#   apps/pricing-mfe/      Next.js microfrontend (porta 4300, em /pricing do mesmo host)
+# Cada mfe espelha um serviço: catalog-mfe ↔ catalog-service, pricing-mfe ↔ pricing-service.
 # catalog ↔ pricing trocam eventos pelo RabbitMQ (catalog.events / pricing.events).
 # → namespaces wlstore-develop / wlstore-prod
-# → hosts <env>.<app>.wlstore.local (catalog-mfe sem ingress: entra pelo shell)
+# → front: <env>.wlstore.local (shell em /, mfes no basePath — Next.js Multi-Zones)
+# → APIs: <env>.<app>.wlstore.local
 #
 # Serviços ainda não implementados (identity, inventory, notification, order,
 # payment, discovery-server) ficam de fora: para incluir um, crie

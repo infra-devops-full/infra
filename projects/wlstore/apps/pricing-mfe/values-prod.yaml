@@ -1,0 +1,5 @@
+# image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
+image:
+  tag: latest
+ingress:
+  host: prod.wlstore.local # mesmo host do shell; o Ingress manda /pricing para cá

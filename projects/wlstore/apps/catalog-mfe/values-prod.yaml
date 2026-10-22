@@ -1,3 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
   tag: sha-cff4b79
+ingress:
+  host: prod.wlstore.local # mesmo host do shell; o Ingress manda /catalog para cá

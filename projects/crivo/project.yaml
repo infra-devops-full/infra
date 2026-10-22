@@ -5,7 +5,8 @@
 #   apps/crivo-be/  API NestJS (porta 8080, migra o banco no start)
 #   apps/crivo-fe/  Next.js   (porta 3000, chama a API pelo Service interno)
 # → namespaces crivo-develop / crivo-prod
-# → hosts <env>.crivo-be.crivo.local / <env>.crivo-fe.crivo.local
+# → front: <env>.crivo.local (domínio do projeto)
+# → API:   <env>.crivo-be.crivo.local
 #
 # Aqui só vai o que a plataforma provisiona por namespace.
 # =============================================================================

@@ -2,9 +2,10 @@
 # app.name / app.environment / app.project são injetados pelo ArgoCD
 # (a partir do caminho deste arquivo).
 #
-# Serve tudo sob basePath /blog e é acessado PELO SHELL (proxy em
-# http://catalog-mfe:4200), por isso não tem ingress próprio. O nome da pasta
-# (= nome do Service) precisa continuar catalog-mfe.
+# Microfrontend (Next.js Multi-Zones): divide o host do projeto com o shell
+# (ingress.host nos values-<env>.yaml) e o NGINX Ingress manda para cá tudo que
+# começa com o basePath. Contrato com as outras equipes:
+#   ingress.path  ==  basePath do next.config.js  (único por mfe)
 
 image:
   # Publicada pelo CI do repo wlstore: wlstore-fe/Dockerfile com APP=catalog-mfe.
@@ -15,13 +16,13 @@ service:
   port: 4200
 
 ingress:
-  enabled: false
+  path: /catalog
 
-# basePath /blog: a raiz "/" responde 404.
+# basePath /catalog: a raiz "/" responde 404.
 livenessProbe:
-  path: /blog
+  path: /catalog
 readinessProbe:
-  path: /blog
+  path: /catalog
 
 resources:
   limits:
