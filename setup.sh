@@ -1,14 +1,20 @@
 #!/bin/bash
 set -e
 
-# DevOps Lab Ninja - Setup Unificado
-# ======================================
-# Este script configura todo o ambiente local do Lab Ninja:
-# 1. Cria cluster k3d (7 nodes)
-# 2. Instala ArgoCD para GitOps
-# 3. Instala Prometheus + Grafana
-# 4. Configura namespaces e aplicações
-# 5. Configura hosts locais
+# ==============================================================================
+# DevOps Platform - Setup Unificado (genérico, orientado a projetos)
+# ==============================================================================
+# 1. Cria cluster k3d
+# 2. Instala NGINX Ingress Controller
+# 3. Instala ArgoCD (GitOps)
+# 4. Instala Prometheus + Grafana (observabilidade)
+# 5. Para cada projeto em projects/<nome>/: namespaces <nome>-<env>,
+#    dependências (Postgres/Redis/RabbitMQ), ghcr-secret e app-secrets
+#    (scripts/apply-project.sh)
+# 6. Plataforma genérica: argocd/ (ApplicationSet que descobre os projetos no
+#    Git) e k8s/ (dashboards) — scripts/apply-platform.sh
+# 7. /etc/hosts num bloco isolado (scripts/hosts.sh)
+# ==============================================================================
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,35 +23,36 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-CLUSTER_NAME="devops-lab"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFRA_ROOT="$SCRIPT_DIR"
+
+# Carrega .env (DATA_DIR, CLUSTER_NAME, GITHUB_TOKEN, GITHUB_USERNAME, ...)
+if [ -f "$INFRA_ROOT/.env" ]; then
+  set -a; # shellcheck disable=SC1091
+  source "$INFRA_ROOT/.env"; set +a
+fi
+
+CLUSTER_NAME="${CLUSTER_NAME:-devops-lab}"
+DATA_DIR="${DATA_DIR:-$HOME/.devops-lab}"
+# Expande eventual $HOME literal vindo do .env
+DATA_DIR="$(eval echo "$DATA_DIR")"
+export CLUSTER_NAME DATA_DIR
+
+# shellcheck source=scripts/lib-project.sh
+source "$SCRIPT_DIR/scripts/lib-project.sh"
 
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║    _   _                    ____ _                 _ _    ║
-║   | \ | | _____  _____    / ___| | ___  _   _  __| | |   ║
-║   |  \| |/ _ \ \/ / _ \  | |   | |/ _ \| | | |/ _` | |   ║
-║   | |\  |  __/>  < (_) | | |___| | (_) | |_| | (_| | |__ ║
-║   |_| \_|\___/_/\_\___/   \____|_|\___/ \__,_|\__,_|____|║
-║                                                           ║
-║   🥷 Lab Ninja - Kubernetes Local                    ║
-║   4 Ambientes: develop → qa → staging → prod             ║
-║                                                           ║
+║   DevOps Platform - Kubernetes Local (GitOps)             ║
+║   k3d + NGINX Ingress + ArgoCD + Prometheus/Grafana       ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
 
 echo ""
-echo -e "${CYAN}Este script irá configurar:${NC}"
-echo "  • Cluster Kubernetes (k3d) com 7 nodes"
-echo "  • NGINX Ingress Controller"
-echo "  • ArgoCD para GitOps automático"
-echo "  • Prometheus + Grafana para observabilidade"
-echo "  • 4 namespaces: develop, qa, staging, prod"
-echo ""
-echo "  • DNS local para ferramentas (.devops.local)"
-echo ""
-echo -e "${YELLOW}Tempo estimado: 10-15 minutos${NC}"
+echo -e "${CYAN}Configuração:${NC}"
+echo "  • Cluster:   $CLUSTER_NAME"
+echo "  • DATA_DIR:  $DATA_DIR"
+echo "  • Projetos:  $(project_names | paste -sd ', ' -)"
 echo ""
 read -p "Iniciar setup? (y/N): " -n 1 -r
 echo
@@ -54,7 +61,6 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# Função para log
 log_step() {
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -62,41 +68,39 @@ log_step() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
-
-log_substep() {
-    echo -e "${CYAN}▸ $1${NC}"
-}
+log_substep() { echo -e "${CYAN}▸ $1${NC}"; }
 
 # ==============================================================================
-# ETAPA 1: Verificar e criar cluster k3d
+# ETAPA 1: Cluster k3d
 # ==============================================================================
-log_step "ETAPA 1/7: Criando Cluster Kubernetes"
+log_step "ETAPA 1/7: Cluster Kubernetes (k3d)"
 
 if k3d cluster list | grep -q "$CLUSTER_NAME"; then
-    echo -e "${YELLOW}⚠️  Cluster '$CLUSTER_NAME' já existe!${NC}"
-    log_substep "Cluster já configurado, prosseguindo..."
+    echo -e "${YELLOW}⚠️  Cluster '$CLUSTER_NAME' já existe, prosseguindo...${NC}"
 else
-    log_substep "Preparando volumes no SSD..."
-    mkdir -p /Volumes/Backup/devops-lab/{data,postgres,prometheus,grafana}
-    
-    log_substep "Criando cluster k3d (1 server + 6 agents)..."
-    k3d cluster create --config="$SCRIPT_DIR/config/k3d-config.yaml"
-    
+    log_substep "Preparando volumes em $DATA_DIR ..."
+    mkdir -p "$DATA_DIR"/{data,postgres,prometheus,grafana}
+
+    log_substep "Renderizando k3d-config (envsubst)..."
+    RENDERED_K3D="$(mktemp -t k3d-config.XXXXXX.yaml)"
+    envsubst '${CLUSTER_NAME} ${DATA_DIR}' \
+      < "$INFRA_ROOT/config/k3d-config.tmpl.yaml" > "$RENDERED_K3D"
+
+    log_substep "Criando cluster k3d..."
+    k3d cluster create --config="$RENDERED_K3D"
+    rm -f "$RENDERED_K3D"
+
     sleep 10
-    log_substep "Verificando nodes..."
     kubectl get nodes -o wide
 fi
 
 # ==============================================================================
-# ETAPA 1.5: Instalar NGINX Ingress Controller
+# ETAPA 1.5: NGINX Ingress Controller
 # ==============================================================================
-log_step "ETAPA 1.5/7: Instalando NGINX Ingress Controller"
+log_step "ETAPA 1.5/7: NGINX Ingress Controller"
 
-log_substep "Adicionando repositório NGINX Ingress..."
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
 helm repo update
-
-log_substep "Instalando NGINX Ingress Controller via Helm..."
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace kube-system \
   --set controller.publishService.enabled=true \
@@ -106,65 +110,43 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --set controller.hostPort.ports.http=80 \
   --set controller.hostPort.ports.https=443 \
   --set 'controller.nodeSelector.kubernetes\.io/os=linux' \
-  --timeout 5m \
-  --wait
+  --timeout 5m --wait
 
-log_substep "Aguardando NGINX Ingress ficar pronto..."
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=ingress-nginx \
-  --namespace=kube-system \
-  --timeout=120s 2>/dev/null || echo "NGINX Ingress ainda inicializando..."
-
+  --namespace=kube-system --timeout=120s 2>/dev/null || echo "NGINX ainda inicializando..."
 echo -e "${GREEN}✓ NGINX Ingress Controller instalado${NC}"
 
 # ==============================================================================
-# ETAPA 2: Criar namespaces
+# ETAPA 2: Namespaces de infra
 # ==============================================================================
-log_step "ETAPA 2/7: Criando Namespaces"
+log_step "ETAPA 2/7: Namespaces de infra"
 
-log_substep "Criando namespaces de ambientes..."
-kubectl create namespace crivo-develop --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace crivo-prod --dry-run=client -o yaml | kubectl apply -f -
-
-log_substep "Criando namespaces de infra..."
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl get namespaces
-
-log_substep "Provisionando PostgreSQL em cada ambiente..."
-bash "$SCRIPT_DIR/scripts/setup-postgres.sh" develop
-bash "$SCRIPT_DIR/scripts/setup-postgres.sh" prod
-
 # ==============================================================================
-# ETAPA 3: Instalar ArgoCD
+# ETAPA 3: ArgoCD
 # ==============================================================================
-log_step "ETAPA 3/7: Instalando ArgoCD"
+log_step "ETAPA 3/7: ArgoCD"
 
-log_substep "Adicionando repositório Helm..."
 helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
 helm repo update
-
-log_substep "Instalando ArgoCD via Helm..."
 helm upgrade --install argocd argo/argo-cd \
-  --namespace argocd \
-  --create-namespace \
+  --namespace argocd --create-namespace \
   --set server.extraArgs[0]="--insecure" \
   --set configs.params."server\.insecure"=true \
   --set server.service.type=ClusterIP \
   --set controller.metrics.enabled=true \
   --set server.metrics.enabled=true \
   --set repoServer.metrics.enabled=true \
-  --timeout 10m \
-  --wait
+  --timeout 10m --wait
 
-log_substep "Aguardando ArgoCD ficar pronto..."
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=argocd-server \
-  --namespace=argocd \
-  --timeout=300s 2>/dev/null || echo "ArgoCD ainda inicializando..."
+  --namespace=argocd --timeout=300s 2>/dev/null || echo "ArgoCD ainda inicializando..."
 
-log_substep "Configurando Ingress para ArgoCD..."
+log_substep "Ingress do ArgoCD..."
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -188,46 +170,34 @@ spec:
               number: 80
 EOF
 
-log_substep "Obtendo senha inicial do ArgoCD..."
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "não-disponível")
-echo -e "${GREEN}✓ ArgoCD instalado - Usuário: admin / Senha: $ARGOCD_PASSWORD${NC}"
+echo -e "${GREEN}✓ ArgoCD instalado - admin / $ARGOCD_PASSWORD${NC}"
 
 # ==============================================================================
-# ETAPA 4: Instalar Observabilidade (Prometheus + Grafana)
+# ETAPA 4: Observabilidade (Prometheus + Grafana)
 # ==============================================================================
-log_step "ETAPA 4/7: Instalando Stack de Observabilidade"
+log_step "ETAPA 4/7: Observabilidade (Prometheus + Grafana)"
 
-log_substep "Adicionando repositório Prometheus Community..."
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
 helm repo update
 
-log_substep "Instalando kube-prometheus-stack..."
 cat <<EOF > /tmp/prometheus-values.yaml
 prometheus:
   prometheusSpec:
     retention: 7d
     resources:
-      requests:
-        cpu: 200m
-        memory: 512Mi
-      limits:
-        cpu: 1000m
-        memory: 2Gi
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { cpu: 1000m, memory: 2Gi }
     serviceMonitorSelectorNilUsesHelmValues: false
-  
   ingress:
     enabled: true
     ingressClassName: nginx
-    hosts:
-      - prometheus.devops.local
-    paths:
-      - /
-
+    hosts: [prometheus.devops.local]
+    paths: [/]
 grafana:
   adminPassword: "devops.local2026"
   persistence:
     enabled: false
-  
   sidecar:
     dashboards:
       enabled: true
@@ -235,210 +205,78 @@ grafana:
       provider:
         foldersFromFilesStructure: true
         allowUiUpdates: true
-  
   ingress:
     enabled: true
     ingressClassName: nginx
-    hosts:
-      - grafana.devops.local
+    hosts: [grafana.devops.local]
     path: /
-
 alertmanager:
   enabled: true
   ingress:
     enabled: true
     ingressClassName: nginx
-    hosts:
-      - alertmanager.devops.local
-    paths:
-      - /
+    hosts: [alertmanager.devops.local]
+    paths: [/]
 EOF
 
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --create-namespace \
+  --namespace monitoring --create-namespace \
   --values /tmp/prometheus-values.yaml \
-  --timeout 10m \
-  --wait
+  --timeout 10m --wait
 
-log_substep "Aguardando pods de observabilidade..."
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=grafana \
-  --namespace=monitoring \
-  --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."
-
-echo -e "${GREEN}✓ Grafana instalado - Usuário: admin / Senha: devops.local2026${NC}"
-
-log_substep "Aplicando dashboards customizados do Grafana..."
-kubectl apply -f "$SCRIPT_DIR/k8s/grafana-dashboard-crivo.yaml"
-kubectl apply -f "$SCRIPT_DIR/k8s/grafana-dashboard-apps.yaml"
-echo -e "${GREEN}✓ Dashboards customizados aplicados${NC}"
-
-log_substep "Instalando Konga (Kong Admin UI)..."
-kubectl apply -f "$SCRIPT_DIR/k8s/konga.yaml"
-echo -e "${GREEN}✓ Konga em http://konga.devops.local${NC}"
-
-echo -e "${GREEN}✓ ServiceMonitors aplicados para infraestrutura${NC}"
+  --namespace=monitoring --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."
+echo -e "${GREEN}✓ Grafana instalado - admin / devops.local2026${NC}"
 
 # ==============================================================================
-# ETAPA 4.5: Criar Secrets das Aplicações
+# ETAPA 5: Projetos (namespaces, dependências, secrets) + plataforma GitOps
 # ==============================================================================
-log_step "ETAPA 4.5/7: Criando Secrets das Aplicações"
+log_step "ETAPA 5/7: Projetos e ArgoCD"
 
-log_substep "Aplicando secrets das aplicações via scripts/create-app-secrets.sh..."
-for ENV_NAME in develop prod; do
-  if [ -f "$SCRIPT_DIR/config/secrets.${ENV_NAME}.env" ]; then
-    bash "$SCRIPT_DIR/scripts/create-app-secrets.sh" "$ENV_NAME"
-    echo -e "  ${GREEN}✅ Secrets criados para crivo-${ENV_NAME}${NC}"
-  else
-    echo -e "  ${YELLOW}⚠️  config/secrets.${ENV_NAME}.env não encontrado.${NC}"
-    echo -e "      Copie config/secrets.${ENV_NAME}.env.example e preencha,"
-    echo -e "      depois rode: ./scripts/create-app-secrets.sh ${ENV_NAME}"
-  fi
+# Primeiro o que o ArgoCD não cria (secrets/dependências), depois o
+# ApplicationSet — assim os pods já nascem com os Secrets disponíveis.
+for PROJ in $(project_names); do
+  bash "$SCRIPT_DIR/scripts/apply-project.sh" "$PROJ"
 done
 
-# Create ghcr-secret if GITHUB_TOKEN is available
-log_substep "Criando ghcr-secret para pull de imagens..."
-if [ -n "$GITHUB_TOKEN" ]; then
-  echo "$GITHUB_TOKEN" | bash "$SCRIPT_DIR/create-ghcr-secrets.sh"
-  echo -e "  ${GREEN}✅ ghcr-secret criado a partir do GITHUB_TOKEN${NC}"
-else
-  echo -e "  ${YELLOW}⚠️  GITHUB_TOKEN não definido. Crie manualmente:${NC}"
-  echo -e "     bash $SCRIPT_DIR/create-ghcr-secrets.sh <seu-token>"
-fi
+bash "$SCRIPT_DIR/scripts/apply-platform.sh"
 
 # ==============================================================================
-# ETAPA 5: Configurar ArgoCD Applications
+# ETAPA 6: /etc/hosts (bloco isolado entre marcadores devops-platform)
 # ==============================================================================
-log_step "ETAPA 5/7: Configurando Projetos ArgoCD"
+log_step "ETAPA 6/7: DNS Local (/etc/hosts)"
 
-log_substep "Aplicando ArgoCD Projects..."
-kubectl apply -f "$SCRIPT_DIR/argocd/projects/crivo-environments.yaml"
-
-log_substep "Aplicando ArgoCD ApplicationSet..."
-kubectl apply -f "$SCRIPT_DIR/argocd/applicationsets/crivo-apps.yaml"
-
-echo -e "${GREEN}✓ Projetos + ApplicationSet configurados (develop, prod)${NC}"
+bash "$SCRIPT_DIR/scripts/hosts.sh" apply
 
 # ==============================================================================
-# ETAPA 6: Configurar /etc/hosts
-# ==============================================================================
-log_step "ETAPA 6/7: Configurando DNS Local (/etc/hosts)"
-
-HOSTS_ENTRIES="
-# DevOps Lab - Ferramentas
-127.0.0.1 argocd.devops.local
-127.0.0.1 grafana.devops.local
-127.0.0.1 prometheus.devops.local
-127.0.0.1 alertmanager.devops.local
-127.0.0.1 konga.devops.local
-# Crivo - Apps (develop)
-127.0.0.1 develop.auth.crivo.local
-127.0.0.1 develop.be.crivo.local
-127.0.0.1 develop.fe.crivo.local
-127.0.0.1 develop.api.crivo.local
-# Crivo - Apps (prod)
-127.0.0.1 prod.auth.crivo.local
-127.0.0.1 prod.be.crivo.local
-127.0.0.1 prod.fe.crivo.local
-127.0.0.1 prod.api.crivo.local
-"
-
-# Remover entradas antigas do DevOps Lab
-sudo sed -i '' '/# DevOps Lab/d' /etc/hosts 2>/dev/null || true
-sudo sed -i '' '/# Crivo - Apps/d' /etc/hosts 2>/dev/null || true
-sudo sed -i '' '/devops\.local/d' /etc/hosts 2>/dev/null || true
-sudo sed -i '' '/crivo\.local/d' /etc/hosts 2>/dev/null || true
-
-# Adicionar novas entradas
-echo "$HOSTS_ENTRIES" | sudo tee -a /etc/hosts > /dev/null
-
-# Flush DNS cache (macOS trata .local como mDNS/Bonjour, precisa limpar cache)
-log_substep "Limpando cache DNS do macOS..."
-sudo dscacheutil -flushcache 2>/dev/null || true
-sudo killall -HUP mDNSResponder 2>/dev/null || true
-
-log_substep "/etc/hosts configurado para ferramentas + cache DNS limpo"
-
-# ==============================================================================
-# ETAPA 7: Verificação Final
+# ETAPA 7: Verificação
 # ==============================================================================
 log_step "ETAPA 7/7: Verificação Final"
 
-log_substep "Verificando NGINX Ingress Controller..."
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=ingress-nginx \
-  --namespace=kube-system \
-  --timeout=60s 2>/dev/null || echo "NGINX Ingress ainda inicializando..."
-
-log_substep "Verificando conectividade dos serviços..."
+  --namespace=kube-system --timeout=60s 2>/dev/null || echo "NGINX ainda inicializando..."
 sleep 5
 
-# Usar --resolve para evitar problemas com mDNS do macOS no .local
-SERVICES_OK=0
-SERVICES_TOTAL=6
-
 for CHECK in "argocd.devops.local ArgoCD" "grafana.devops.local Grafana" "prometheus.devops.local Prometheus" "alertmanager.devops.local AlertManager"; do
-    HOST=$(echo $CHECK | cut -d' ' -f1)
-    NAME=$(echo $CHECK | cut -d' ' -f2)
+    HOST=$(echo "$CHECK" | cut -d' ' -f1); NAME=$(echo "$CHECK" | cut -d' ' -f2)
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 --resolve "${HOST}:80:127.0.0.1" "http://${HOST}" 2>/dev/null)
     if [[ "$HTTP_CODE" =~ ^(200|301|302|303|307|404)$ ]]; then
         echo -e "${GREEN}✓ ${NAME} acessível (HTTP ${HTTP_CODE})${NC}"
-        SERVICES_OK=$((SERVICES_OK + 1))
     else
         echo -e "${YELLOW}⚠️  ${NAME} ainda inicializando (HTTP ${HTTP_CODE})${NC}"
     fi
 done
 
-echo -e "\n${GREEN}${SERVICES_OK}/${SERVICES_TOTAL} serviços respondendo${NC}"
-
-# ==============================================================================
-# FINALIZAÇÃO
-# ==============================================================================
 echo ""
-echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║                                                           ║${NC}"
-echo -e "${GREEN}║              ✨  SETUP CONCLUÍDO COM SUCESSO!  ✨         ║${NC}"
-echo -e "${GREEN}║                                                           ║${NC}"
-echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+echo -e "${GREEN}✨  SETUP CONCLUÍDO  ✨${NC}"
 echo ""
-echo -e "${CYAN}🔧 FERRAMENTAS INSTALADAS:${NC}"
+echo -e "  🎯 ArgoCD       → http://argocd.devops.local   (admin / $ARGOCD_PASSWORD)"
+echo -e "  📊 Grafana      → http://grafana.devops.local   (admin / devops.local2026)"
+echo -e "  🔍 Prometheus   → http://prometheus.devops.local"
+echo -e "  🚨 AlertManager → http://alertmanager.devops.local"
 echo ""
-echo -e "  🎯 ${YELLOW}ArgoCD${NC}         → http://argocd.devops.local"
-echo -e "     Usuário: admin | Senha: $ARGOCD_PASSWORD"
-echo ""
-echo -e "  📊 ${YELLOW}Grafana${NC}        → http://grafana.devops.local"
-echo -e "     Usuário: admin | Senha: devops.local2026"
-echo -e "     Dashboards: Kubernetes Cluster, Pods, Node Exporter, NGINX Ingress"
-echo -e "     + DevOps Overview, DevOps Applications Performance"
-echo ""
-echo -e "  🔍 ${YELLOW}Prometheus${NC}     → http://prometheus.devops.local"
-echo -e "  🚨 ${YELLOW}AlertManager${NC}   → http://alertmanager.devops.local"
-echo ""
-echo -e "${CYAN}🚀 PRONTO PARA NOVAS APPS:${NC}"
-echo ""
-echo -e "  Use o ArgoCD UI para adicionar suas aplicações manualmente"
-echo -e "  ou crie novos ApplicationSets em argocd/applicationsets/"
-echo ""
-echo -e "${YELLOW}⚠️  IMPORTANTE:${NC}"
-echo -e "   As aplicações podem estar com status 'Degraded' até você configurar o GitHub token:"
-echo -e ""
-echo -e "   ${GREEN}Opção 1 (Recomendado):${NC} Configurar no .env"
-echo -e "   1. Editar arquivo .env na raiz do projeto"
-echo -e "   2. Adicionar seu token: GITHUB_TOKEN=ghp_xxxxx"
-echo -e "   3. Executar: bash local/create-ghcr-secrets.sh"
-echo -e ""
-echo -e "   ${GREEN}Opção 2:${NC} Passar token diretamente"
-echo -e "   bash local/create-ghcr-secrets.sh <TOKEN>"
-echo -e ""
-echo -e "   ${GREEN}Opção 3:${NC} Tornar packages públicos no GitHub"
-echo -e "   https://github.com/geraldobl58?tab=packages"
-echo ""
-echo -e "${CYAN}📚 PRÓXIMOS PASSOS:${NC}"
-echo -e "   • Verificar status:  ${GREEN}make status${NC}"
-echo -e "   • Explorar cluster:  ${GREEN}k9s${NC}"
-echo -e "   • Ver logs:          ${GREEN}kubectl logs -f <pod> -n <namespace>${NC}"
-echo -e "   • Destruir tudo:     ${GREEN}make destroy${NC}"
-echo ""
-echo -e "${GREEN}🎉 Você tem um Lab profissional rodando localmente!${NC}"
+echo -e "${CYAN}Projetos aplicados:${NC} $(project_names | paste -sd ', ' -)"
+echo -e "${CYAN}Próximos passos:${NC} make status | k9s | make destroy"
 echo ""

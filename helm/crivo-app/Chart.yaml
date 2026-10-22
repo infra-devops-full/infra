@@ -1,6 +1,0 @@
-apiVersion: v2
-name: crivo-app
-description: Chart genérico para aplicações Crivo (frontend, backend, auth)
-type: application
-version: 1.0.0
-appVersion: "1.0.1"

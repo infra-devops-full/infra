@@ -76,13 +76,12 @@ github_pat
 **/token.txt
 **/credentials.txt
 
-# Config secrets per environment (gerados a partir do .example, gitignored)
-config/secrets.*.env
-!config/secrets.*.env.example
-
-# Chave pública do Keycloak por ambiente (renovada quando o realm é
-# recriado; faz parte da configuração do Kong)
-config/keycloak.*.pub
+# Segredos dos projetos: projects/<p>/secrets/<env>.env NUNCA vão pro Git.
+# Só o example.env (valores fictícios de lab) é versionado. O diretório
+# precisa ser reincluído antes, por causa do **/secrets/ acima.
+!projects/*/secrets/
+projects/*/secrets/*
+!projects/*/secrets/example.env
 
 # Setup logs (podem conter tokens)
 setup.log

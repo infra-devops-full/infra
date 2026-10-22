@@ -1,0 +1,68 @@
+# k3d configuration (template) — renderizado por setup.sh via envsubst.
+# Variáveis: ${CLUSTER_NAME} ${DATA_DIR}
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: ${CLUSTER_NAME}
+servers: 1
+agents: 6 # 1 server + 6 agents = 7 nodes (ideal para toda infraestrutura)
+image: rancher/k3s:v1.28.5-k3s1
+
+# Porta para acessar serviços externos
+ports:
+  - port: 80:80
+    nodeFilters:
+      - loadbalancer
+  - port: 443:443
+    nodeFilters:
+      - loadbalancer
+
+# Volumes persistentes no HOST (DATA_DIR — default ~/.devops-lab, disco interno)
+volumes:
+  - volume: ${DATA_DIR}/data:/var/lib/rancher/k3s/storage
+    nodeFilters:
+      - all
+  - volume: ${DATA_DIR}/postgres:/var/lib/postgresql/data
+    nodeFilters:
+      - server:0
+
+# Labels para os nodes
+options:
+  k3d:
+    wait: true
+    timeout: "120s"
+    disableLoadbalancer: false
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+      - arg: --disable=metrics-server
+        nodeFilters:
+          - server:*
+      - arg: --tls-san=devops.local
+        nodeFilters:
+          - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true
+  runtime:
+    labels:
+      - label: environment=local
+        nodeFilters:
+          - all
+      - label: tier=compute
+        nodeFilters:
+          - agent:*
+
+# Registry local
+registries:
+  create:
+    name: registry.devops.local
+    host: "0.0.0.0"
+    hostPort: "5000"
+  config: |
+    mirrors:
+      "registry.devops.local:5000":
+        endpoint:
+          - http://registry.devops.local:5000

@@ -1,0 +1,32 @@
+# =============================================================================
+# Projeto: nest-rabbitmq
+# -----------------------------------------------------------------------------
+# Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
+#   apps/<app>/values.yaml          comum a todos os ambientes
+#   apps/<app>/values-<env>.yaml    um arquivo por ambiente (develop, prod...)
+# → namespaces nest-rabbitmq-develop / nest-rabbitmq-prod
+# → hosts <env>.<app>.nest-rabbitmq.local
+#
+# Aqui só vai o que a plataforma provisiona por namespace.
+# =============================================================================
+
+# Código da aplicação (documentação — quem builda é o CI desse repo).
+appRepo: https://github.com/geraldobl58/microservice-with-nestjs-rabbitmq
+
+# RabbitMQ por ambiente → Secret `rabbitmq` (RABBITMQ_URL, RABBITMQ_USER,
+# RABBITMQ_PASSWORD) no namespace.
+rabbitmq:
+  enabled: true
+  user: nest
+  password: nest_password
+
+# Postgres: descomente quando o app precisar de banco → Secret `postgres`
+# (DATABASE_URL, DIRECT_URL).
+# database:
+#   user: nest
+#   password: nest_password
+#   defaultDb: products
+
+# Redis: → Secret `redis` (REDIS_URL, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD).
+# redis:
+#   enabled: true

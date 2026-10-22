@@ -1,0 +1,6 @@
+apiVersion: v2
+name: app
+description: Chart genérico da plataforma — um Deployment/Service/Ingress por app de qualquer projeto
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

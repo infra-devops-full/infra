@@ -1,0 +1,6 @@
+# Atualizado automaticamente pelo CI do app a cada push na main.
+image:
+  tag: latest
+
+env:
+  NODE_ENV: development

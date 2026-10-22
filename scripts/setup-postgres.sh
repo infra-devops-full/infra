@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup-postgres.sh
+# setup-postgres.sh  (genérico)
 # -----------------------------------------------------------------------------
-# Cria PostgreSQL no namespace crivo-<env>:
-#   - ConfigMap postgres-init (cria bancos crivo_keycloak + crivo_better_auth)
+# Cria PostgreSQL em um namespace:
+#   - Secret postgres  (DATABASE_URL, DIRECT_URL) para as apps via envFrom
+#   - ConfigMap postgres-init (cria bancos extras, se houver)
 #   - Service postgres (ClusterIP, 5432)
 #   - Deployment postgres com volume emptyDir (volátil)
 #
@@ -11,35 +12,67 @@
 # path no host; o Finder/Spotlight injeta arquivos AppleDouble (._*) ali e
 # Postgres trava com "Operation not permitted". emptyDir evita esse problema
 # 100%. Em troca, dados são perdidos no restart do pod — mas migrations +
-# seed + import-realm são reprodutíveis via make targets.
+# seed são reprodutíveis.
 #
 # Uso:
-#   ./scripts/setup-postgres.sh <develop|prod> [--reset]
+#   ./scripts/setup-postgres.sh --namespace <ns> [opções]
 #
-# --reset: apaga deployment primeiro (forçar recriação).
+# Opções:
+#   --namespace <ns>        (obrigatório) namespace alvo (ex.: meuapp-develop)
+#   --user <user>           usuário do Postgres          (default: postgres)
+#   --password <pass>       senha do Postgres            (default: postgres)
+#   --db <name>             banco principal (POSTGRES_DB)(default: app)
+#   --extra-dbs "a b c"     bancos extras a criar (lista separada por espaço)
+#   --reset                 apaga o deployment antes de recriar
 # =============================================================================
 
 set -euo pipefail
 
-ENV_NAME="${1:-}"
-shift || true
+NS=""
+PG_USER="postgres"
+PG_PASS="postgres"
+PG_DB="app"
+EXTRA_DBS=""
 RESET=false
-for arg in "$@"; do
-  [[ "$arg" == "--reset" ]] && RESET=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --namespace) NS="$2"; shift 2 ;;
+    --user)      PG_USER="$2"; shift 2 ;;
+    --password)  PG_PASS="$2"; shift 2 ;;
+    --db)        PG_DB="$2"; shift 2 ;;
+    --extra-dbs) EXTRA_DBS="$2"; shift 2 ;;
+    --reset)     RESET=true; shift ;;
+    *) echo "Argumento desconhecido: $1"; exit 1 ;;
+  esac
 done
 
-if [[ -z "$ENV_NAME" ]]; then
-  echo "Uso: $0 <develop|prod> [--reset]"
+if [[ -z "$NS" ]]; then
+  echo "Uso: $0 --namespace <ns> [--user u --password p --db name --extra-dbs \"a b\"] [--reset]"
   exit 1
 fi
 
-NS="crivo-${ENV_NAME}"
 kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
 
 if $RESET; then
   echo "🗑️  Reset solicitado, apagando deployment..."
   kubectl delete deploy postgres -n "$NS" --ignore-not-found --wait=true
 fi
+
+# Connection string para as apps (envFrom: [{ secretRef: postgres }]).
+# DIRECT_URL = mesma URL: no cluster não há pooler (ex.: Supabase) no caminho.
+DB_URL="postgresql://${PG_USER}:${PG_PASS}@postgres.${NS}.svc.cluster.local:5432/${PG_DB}?schema=public"
+kubectl -n "$NS" create secret generic postgres \
+  --from-literal=DATABASE_URL="$DB_URL" \
+  --from-literal=DIRECT_URL="$DB_URL" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Monta o bloco SQL de bancos extras
+EXTRA_SQL=""
+for db in $EXTRA_DBS; do
+  EXTRA_SQL+="      CREATE DATABASE ${db};\n"
+  EXTRA_SQL+="      GRANT ALL PRIVILEGES ON DATABASE ${db} TO \"\$POSTGRES_USER\";\n"
+done
 
 # ConfigMap com init scripts (cria bancos extras)
 cat <<EOF | kubectl apply -f -
@@ -53,15 +86,9 @@ data:
     #!/bin/bash
     set -e
     psql -v ON_ERROR_STOP=1 --username "\$POSTGRES_USER" --dbname "\$POSTGRES_DB" <<-EOSQL
-      CREATE DATABASE crivo_keycloak;
-      GRANT ALL PRIVILEGES ON DATABASE crivo_keycloak TO "\$POSTGRES_USER";
-      CREATE DATABASE crivo_better_auth;
-      GRANT ALL PRIVILEGES ON DATABASE crivo_better_auth TO "\$POSTGRES_USER";
+$(printf "%b" "$EXTRA_SQL")
     EOSQL
 EOF
-
-# Apaga PVC legacy se existir (migramos pra emptyDir)
-kubectl delete pvc postgres-pvc -n "$NS" --ignore-not-found --wait=false >/dev/null 2>&1 || true
 
 # Service
 cat <<EOF | kubectl apply -f -
@@ -82,7 +109,7 @@ spec:
     app: postgres
 EOF
 
-# Deployment com initContainer limpando macOS metadata
+# Deployment
 cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
@@ -108,18 +135,18 @@ spec:
           image: postgres:16-alpine
           env:
             - name: POSTGRES_USER
-              value: crivo
+              value: ${PG_USER}
             - name: POSTGRES_PASSWORD
-              value: crivo_password
+              value: ${PG_PASS}
             - name: POSTGRES_DB
-              value: crivo_app
+              value: ${PG_DB}
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           ports:
             - containerPort: 5432
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "crivo"]
+              command: ["pg_isready", "-U", "${PG_USER}"]
             initialDelaySeconds: 10
             periodSeconds: 5
           resources:
@@ -135,8 +162,7 @@ spec:
           # emptyDir em vez de PVC pra evitar arquivos AppleDouble (._*)
           # que macOS injeta no path do local-path provisioner do k3d.
           # Trade-off: dados são voláteis (perdidos no restart do pod),
-          # mas seed + migrations + import-realm são reprodutíveis via
-          # make targets. Para lab é uma troca aceitável.
+          # mas seed + migrations são reprodutíveis. Para lab é aceitável.
           emptyDir:
             sizeLimit: 2Gi
         - name: init

@@ -1,0 +1,28 @@
+# =============================================================================
+# Projeto: crivo
+# -----------------------------------------------------------------------------
+# Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
+#   apps/crivo-be/  API NestJS (porta 8080, migra o banco no start)
+#   apps/crivo-fe/  Next.js   (porta 3000, chama a API pelo Service interno)
+# → namespaces crivo-develop / crivo-prod
+# → hosts <env>.crivo-be.crivo.local / <env>.crivo-fe.crivo.local
+#
+# Aqui só vai o que a plataforma provisiona por namespace.
+# =============================================================================
+
+# Código da aplicação (documentação — quem builda é o CI desse repo).
+appRepo: https://github.com/geraldobl58/crivo
+
+# Postgres por ambiente → Secret `postgres` (DATABASE_URL, DIRECT_URL).
+database:
+  user: crivo
+  password: crivo_password
+  defaultDb: crivo
+
+# Redis por ambiente (BullMQ) → Secret `redis` (REDIS_URL, REDIS_HOST, ...).
+redis:
+  enabled: true
+
+# Demais segredos do crivo-be (JWT, Stripe, Cloudinary, ...) → Secret
+# `app-secrets`, a partir de secrets/<env>.env (gitignored) ou, na falta dele,
+# secrets/example.env (valores de lab).

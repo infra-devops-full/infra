@@ -1,87 +1,45 @@
 #!/bin/bash
+# =============================================================================
+# 99-show-urls.sh  (genérico) — URLs de acesso da plataforma e dos projetos
+# =============================================================================
+set -euo pipefail
 
-echo "🚀 DevOps Lab - URLs de Acesso"
-echo "=================================="
+GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; NC='\033[0m'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFRA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib-project.sh
+source "$SCRIPT_DIR/lib-project.sh"
+
+echo "🚀 DevOps Platform - URLs de Acesso"
+echo "===================================="
 echo ""
 
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo -e "${GREEN}🎯 Ferramentas de Gestão:${NC}"
-echo ""
-echo -e "  ${BLUE}ArgoCD (GitOps):${NC}"
-echo "    URL: http://argocd.devops.local"
-echo "    User: admin"
-ARGOCD_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d)
-echo "    Pass: $ARGOCD_PASS"
+echo -e "${GREEN}🎯 Ferramentas:${NC}"
+echo -e "  ${BLUE}ArgoCD:${NC}      http://argocd.devops.local   (admin)"
+ARGOCD_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "n/d")
+echo "               senha: $ARGOCD_PASS"
+echo -e "  ${BLUE}Grafana:${NC}     http://grafana.devops.local   (admin / devops.local2026)"
+echo -e "  ${BLUE}Prometheus:${NC}  http://prometheus.devops.local"
+echo -e "  ${BLUE}AlertMgr:${NC}    http://alertmanager.devops.local"
 echo ""
 
-echo -e "  ${BLUE}Grafana (Métricas):${NC}"
-echo "    URL: http://grafana.devops.local"
-echo "    User: admin"
-echo "    Pass: devops.local2026"
-echo ""
-
-echo -e "  ${BLUE}Prometheus (Métricas Raw):${NC}"
-echo "    URL: http://prometheus.devops.local"
-echo ""
-
-echo -e "  ${BLUE}AlertManager (Alertas):${NC}"
-echo "    URL: http://alertmanager.devops.local"
-echo ""
-
-echo -e "  ${BLUE}Konga (Kong Admin UI):${NC}"
-echo "    URL: http://konga.devops.local"
-echo "    (cria usuário admin no primeiro acesso)"
-echo ""
-
-echo -e "${GREEN}🌐 Aplicações por Ambiente:${NC}"
-echo ""
-echo -e "  ${BLUE}Develop:${NC}"
-echo "    Frontend (Next):    http://develop.fe.crivo.local"
-echo "    API Gateway (Kong): http://develop.api.crivo.local"
-echo "    Backend direto:     http://develop.be.crivo.local"
-echo "    Auth (Keycloak):    http://develop.auth.crivo.local"
-echo ""
-
-echo -e "  ${BLUE}Prod:${NC}"
-echo "    Frontend (Next):    http://prod.fe.crivo.local"
-echo "    API Gateway (Kong): http://prod.api.crivo.local"
-echo "    Backend direto:     http://prod.be.crivo.local"
-echo "    Auth (Keycloak):    http://prod.auth.crivo.local"
-echo ""
-
-echo -e "${YELLOW}📊 Status do Cluster:${NC}"
-echo ""
-kubectl get nodes -o wide
-echo ""
-
-echo -e "${YELLOW}📦 Pods por Namespace:${NC}"
-echo ""
-echo "Namespace: argocd"
-kubectl get pods -n argocd --no-headers 2>/dev/null | wc -l | xargs echo "  Pods:"
-
-echo "Namespace: monitoring"
-kubectl get pods -n monitoring --no-headers 2>/dev/null | wc -l | xargs echo "  Pods:"
-
-# Namespace logging removido (Elasticsearch muito pesado)
-# echo "Namespace: logging"
-# kubectl get pods -n logging --no-headers 2>/dev/null | wc -l | xargs echo "  Pods:"
-
-for NS in crivo-develop crivo-prod; do
-  echo "Namespace: $NS"
-  kubectl get pods -n $NS --no-headers 2>/dev/null | wc -l | xargs echo "  Pods:"
+echo -e "${GREEN}🌐 Projetos:${NC}"
+for PROJ in $(project_names); do
+  echo -e "  ${YELLOW}$PROJ${NC}"
+  for ENV_NAME in $(project_envs "$PROJ"); do
+    echo -e "    ${BLUE}$ENV_NAME:${NC}"
+    for h in $(project_hosts "$PROJ" "$ENV_NAME"); do
+      echo "      http://$h"
+    done
+  done
 done
+echo ""
 
+echo -e "${YELLOW}📦 Pods por namespace:${NC}"
+for NS in argocd monitoring $(for p in $(project_names); do project_namespaces "$p"; done); do
+  n=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  echo "  $NS: $n pods"
+done
 echo ""
-echo -e "${GREEN}✅ Lab está rodando!${NC}"
-echo ""
-echo -e "${BLUE}📝 Comandos úteis:${NC}"
-echo "  k9s                           # Interface visual para K8s"
-echo "  kubectl get pods -A           # Ver todos os pods"
-echo "  kubectl top nodes             # Uso de recursos dos nodes"
-echo "  kubectl top pods -A           # Uso de recursos dos pods"
-echo "  argocd app list               # Listar apps no ArgoCD"
-echo ""
+echo -e "${GREEN}✅ Plataforma rodando!${NC}"

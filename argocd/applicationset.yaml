@@ -1,0 +1,75 @@
+# =============================================================================
+# ApplicationSet único e genérico: descobre TODAS as apps de TODOS os projetos.
+# Renderizado com envsubst (${INFRA_REPO_URL} ${INFRA_BRANCH}).
+#
+# Cada arquivo  projects/<projeto>/apps/<app>/values-<env>.yaml  no Git vira
+# uma Application:
+#   nome:       <app>-<env>, prefixado com <projeto>- quando o app não começa
+#               com o nome do projeto (loja-api-develop, loja-web-develop
+#               para loja/apps/loja-api; loja-checkout-develop para loja/apps/checkout)
+#   chart:      charts/app (genérico)
+#   values:     apps/<app>/values.yaml + apps/<app>/values-<env>.yaml
+#   namespace:  <projeto>-<env>
+#
+# Adicionar projeto/app/ambiente = commitar os arquivos em projects/.
+# Nada aqui muda.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: ${INFRA_REPO_URL}
+        revision: ${INFRA_BRANCH}
+        files:
+          - path: "projects/*/apps/*/values-*.yaml"
+  template:
+    metadata:
+      name: '{{ $p := index .path.segments 1 }}{{ $a := index .path.segments 3 }}{{ if hasPrefix $p $a }}{{ $a }}{{ else }}{{ $p }}-{{ $a }}{{ end }}-{{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}'
+      labels:
+        devops-platform/project: '{{ index .path.segments 1 }}'
+        devops-platform/app: '{{ index .path.segments 3 }}'
+        devops-platform/env: '{{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}'
+    spec:
+      project: platform-apps
+      source:
+        repoURL: ${INFRA_REPO_URL}
+        targetRevision: ${INFRA_BRANCH}
+        path: charts/app
+        helm:
+          releaseName: '{{ index .path.segments 3 }}'
+          valueFiles:
+            - '../../{{ .path.path }}/values.yaml'
+            - '../../{{ .path.path }}/{{ .path.filename }}'
+          parameters:
+            - name: app.name
+              value: '{{ index .path.segments 3 }}'
+            - name: app.environment
+              value: '{{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}'
+            - name: app.project
+              value: '{{ index .path.segments 1 }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ index .path.segments 1 }}-{{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+          - ServerSideApply=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+  syncPolicy:
+    preserveResourcesOnDeletion: false

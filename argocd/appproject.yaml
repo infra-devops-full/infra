@@ -1,0 +1,32 @@
+# =============================================================================
+# AppProject único das aplicações da plataforma.
+# Renderizado com envsubst (${INFRA_REPO_URL}) por setup.sh / make apply-argocd.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform-apps
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Apps de todos os projetos em projects/
+  sourceRepos:
+    - ${INFRA_REPO_URL}
+  # Cada app só vai para o namespace <projeto>-<env> (definido no
+  # applicationset.yaml). Os namespaces de infra ficam bloqueados.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "!argocd"
+    - server: https://kubernetes.default.svc
+      namespace: "!monitoring"
+    - server: https://kubernetes.default.svc
+      namespace: "!kube-*"
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

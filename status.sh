@@ -11,19 +11,19 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-CLUSTER_NAME="devops-lab"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFRA_ROOT="$SCRIPT_DIR"
+if [ -f "$INFRA_ROOT/.env" ]; then
+  set -a; # shellcheck disable=SC1091
+  source "$INFRA_ROOT/.env"; set +a
+fi
+CLUSTER_NAME="${CLUSTER_NAME:-devops-lab}"
+# shellcheck source=scripts/lib-project.sh
+source "$SCRIPT_DIR/scripts/lib-project.sh"
 
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║    _   _                    ____ _                 _ _    ║
-║   | \ | | _____  _____    / ___| | ___  _   _  __| | |   ║
-║   |  \| |/ _ \ \/ / _ \  | |   | |/ _ \| | | |/ _` | |   ║
-║   | |\  |  __/>  < (_) | | |___| | (_) | |_| | (_| | |__ ║
-║   |_| \_|\___/_/\_\___/   \____|_|\___/ \__,_|\__,_|____|║
-║                                                           ║
-║   🥷 Lab Ninja - Status Report                      ║
-║                                                           ║
+║   DevOps Platform - Status Report                         ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
 
@@ -69,7 +69,11 @@ echo -e "${YELLOW}📦 NAMESPACES${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-for ns in crivo-develop crivo-prod monitoring argocd; do
+PROJECT_NS=""
+for p in $(project_names); do
+  for ns in $(project_namespaces "$p"); do PROJECT_NS="$PROJECT_NS $ns"; done
+done
+for ns in $PROJECT_NS monitoring argocd; do
     if kubectl get namespace "$ns" &>/dev/null; then
         echo -e "  ${GREEN}✓${NC} $ns"
     else
@@ -173,33 +177,24 @@ echo ""
 # ==============================================================================
 # Verificar Aplicações por Namespace
 # ==============================================================================
-for ENV in develop qa staging prod; do
-    NS="crivo-$ENV"
-    if [ "$ENV" == "prod" ]; then
-        DOMAIN_PREFIX=""
-    else
-        DOMAIN_PREFIX="$ENV."
-    fi
-    
+for PROJ in $(project_names); do
+  for ENV in $(project_envs "$PROJ"); do
+    NS="${PROJ}-${ENV}"
+
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}🚀 AMBIENTE: $(echo $ENV | tr '[:lower:]' '[:upper:]')${NC}"
+    echo -e "${YELLOW}🚀 $(echo "$PROJ" | tr '[:lower:]' '[:upper:]') / $(echo "$ENV" | tr '[:lower:]' '[:upper:]')${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    
+
     POD_COUNT=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$POD_COUNT" -eq "0" ]; then
+    if [ "${POD_COUNT:-0}" -eq "0" ]; then
         echo -e "  ${YELLOW}⚠${NC} Nenhum pod encontrado"
-        echo -e "  ${BLUE}URLs:${NC}"
-        echo -e "    • Backend:  http://${DOMAIN_PREFIX}be.crivo.local"
-        echo -e "    • Frontend: http://${DOMAIN_PREFIX}fe.crivo.local"
-        echo -e "    • Auth:     http://${DOMAIN_PREFIX}auth.crivo.local"
     else
         echo -e "${BLUE}Pods ($POD_COUNT):${NC}"
-        kubectl get pods -n "$NS" --no-headers 2>/dev/null | while read line; do
+        kubectl get pods -n "$NS" --no-headers 2>/dev/null | while read -r line; do
             pod=$(echo "$line" | awk '{print $1}')
             ready=$(echo "$line" | awk '{print $2}')
             status=$(echo "$line" | awk '{print $3}')
-            
             if [ "$status" == "Running" ] && [[ "$ready" =~ ^[1-9].*/.*$ ]]; then
                 echo -e "  ${GREEN}✓${NC} $pod - $status ($ready)"
             elif [ "$status" == "Running" ]; then
@@ -208,15 +203,15 @@ for ENV in develop qa staging prod; do
                 echo -e "  ${RED}✗${NC} $pod - $status ($ready)"
             fi
         done
-        
-        echo ""
-        echo -e "${BLUE}URLs:${NC}"
-        echo -e "  • Backend:  http://${DOMAIN_PREFIX}be.crivo.local"
-        echo -e "  • Frontend: http://${DOMAIN_PREFIX}fe.crivo.local"
-        echo -e "  • Auth:     http://${DOMAIN_PREFIX}auth.crivo.local"
     fi
-    
+
     echo ""
+    echo -e "${BLUE}URLs:${NC}"
+    for h in $(project_hosts "$PROJ" "$ENV"); do
+      echo -e "  • http://$h"
+    done
+    echo ""
+  done
 done
 
 # ==============================================================================
@@ -241,7 +236,7 @@ DEGRADED_APPS=$(kubectl get applications -n argocd --no-headers 2>/dev/null | gr
 if [ "${DEGRADED_APPS:-0}" -gt "0" ]; then
     echo -e "${YELLOW}⚠️  ATENÇÃO:${NC} $DEGRADED_APPS aplicações degradadas"
     echo -e "   Possível causa: ImagePullBackOff (imagens privadas)"
-    echo -e "   Solução: ${GREEN}bash local/create-ghcr-secrets.sh <GITHUB_TOKEN>${NC}"
+    echo -e "   Solução: ${GREEN}bash create-ghcr-secrets.sh --namespaces \"<ns...>\" --token <GITHUB_TOKEN>${NC}"
     echo ""
 fi
 

@@ -14,7 +14,14 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-CLUSTER_NAME="devops-lab"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a; # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/.env"; set +a
+fi
+CLUSTER_NAME="${CLUSTER_NAME:-devops-lab}"
+DATA_DIR="${DATA_DIR:-$HOME/.devops-lab}"
+DATA_DIR="$(eval echo "$DATA_DIR")"
 
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
@@ -107,26 +114,9 @@ echo ""
 # ==============================================================================
 echo -e "${YELLOW}🧹 Limpando /etc/hosts...${NC}"
 
-# Contar entradas antes
-ENTRIES_BEFORE=$(grep -c "devops.local" /etc/hosts 2>/dev/null || echo "0")
-
-if [ "$ENTRIES_BEFORE" -gt "0" ]; then
-    echo -e "${BLUE}  Removendo $ENTRIES_BEFORE entradas do /etc/hosts...${NC}"
-    
-    # Remover entradas do DevOps Lab
-    sudo sed -i '' '/# DevOps Lab/d' /etc/hosts 2>/dev/null || true
-    sudo sed -i '' '/devops\.local/d' /etc/hosts 2>/dev/null || true
-    
-    ENTRIES_AFTER=$(grep -c "devops.local" /etc/hosts 2>/dev/null || echo "0")
-    
-    if [ "$ENTRIES_AFTER" -eq "0" ]; then
-        echo -e "${GREEN}✓ Entradas removidas do /etc/hosts${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Algumas entradas podem não ter sido removidas${NC}"
-    fi
-else
-    echo -e "${BLUE}  Nenhuma entrada encontrada no /etc/hosts${NC}"
-fi
+# Remove só o bloco "# >>> devops-platform >>>" (entradas suas ficam intactas)
+bash "$SCRIPT_DIR/scripts/hosts.sh" remove || \
+    echo -e "${YELLOW}⚠️  Não foi possível limpar o /etc/hosts${NC}"
 
 echo ""
 
@@ -148,14 +138,14 @@ echo ""
 # ==============================================================================
 # Opcional: Limpar volumes (pergunta antes)
 # ==============================================================================
-if [ -d "/Volumes/Backup/devops-lab" ]; then
-    echo -e "${YELLOW}📦 Volumes persistentes encontrados em: /Volumes/Backup/devops-lab${NC}"
+if [ -d "$DATA_DIR" ]; then
+    echo -e "${YELLOW}📦 Volumes persistentes encontrados em: $DATA_DIR${NC}"
     read -p "Deseja remover os volumes também? (y/N): " -n 1 -r
     echo
-    
+
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo -e "${YELLOW}🗑️  Removendo volumes...${NC}"
-        sudo rm -rf /Volumes/Backup/devops-lab
+        sudo rm -rf "$DATA_DIR"
         echo -e "${GREEN}✓ Volumes removidos${NC}"
     else
         echo -e "${BLUE}ℹ️  Volumes mantidos (podem ser reutilizados no próximo setup)${NC}"

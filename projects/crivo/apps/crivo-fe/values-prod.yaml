@@ -1,0 +1,3 @@
+# Promoção manual: copie para cá a tag validada em values-develop.yaml.
+image:
+  tag: latest

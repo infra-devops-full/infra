@@ -1,0 +1,112 @@
+# =============================================================================
+# Template de CI/CD (GitOps) para repositórios de aplicação.
+# Copie para <repo-do-app>/.github/workflows/deploy.yml e ajuste:
+#   - env.INFRA_PROJECT     pasta do projeto em projects/ no repo de infra
+#   - matrix.include        uma entrada por app (= pasta projects/<p>/apps/<app>)
+#
+# Fluxo:
+#   push na main do app
+#     → build + push: ghcr.io/<owner>/<repo>/<app>:sha-<7>  (+ latest)
+#     → commit no REPO DE INFRA: image.tag em
+#       projects/<INFRA_PROJECT>/apps/<app>/values-<DEPLOY_ENV>.yaml
+#     → ArgoCD detecta o commit e faz o rollout em <projeto>-<env>
+#
+# Secret necessário no repo do app (Settings → Secrets → Actions):
+#   INFRA_REPO_TOKEN  PAT fine-grained com "Contents: Read and write" no repo
+#                     de infra.
+# =============================================================================
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  INFRA_REPO: infra-devops-full/infra   # owner/repo da plataforma DevOps
+  INFRA_BRANCH: main                     # branch que o ArgoCD acompanha
+  INFRA_PROJECT: my-project              # pasta em projects/ no repo de infra
+  DEPLOY_ENV: develop                    # ambiente atualizado automaticamente
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          # app:        nome da pasta em projects/<p>/apps/ (vira o nome da imagem)
+          # context:    contexto do docker build
+          # dockerfile: caminho do Dockerfile
+          # build-args: opcional, uma linha KEY=valor por argumento
+          - app: my-app
+            context: ./my-app
+            dockerfile: ./my-app/Dockerfile
+            build-args: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nome e tag da imagem
+        id: img
+        run: |
+          echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}/${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build-args }}
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }}
+            ${{ steps.img.outputs.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Evita dois pushes simultâneos no repo de infra.
+    concurrency: infra-${{ github.repository }}
+    env:
+      APPS: my-app                       # mesmos nomes de matrix.include[].app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INFRA_REPO }}
+          ref: ${{ env.INFRA_BRANCH }}
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+
+      - name: Atualiza image.tag no repo de infra
+        run: |
+          TAG="sha-${GITHUB_SHA::7}"
+          for APP in $APPS; do
+            FILE="projects/${INFRA_PROJECT}/apps/${APP}/values-${DEPLOY_ENV}.yaml"
+            yq -i ".image.tag = \"${TAG}\"" "$FILE"
+            echo "→ $FILE: image.tag=${TAG}"
+          done
+
+      - name: Commit + push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add projects/
+          if git diff --cached --quiet; then echo "Nada a atualizar"; exit 0; fi
+          git commit -m "deploy(${INFRA_PROJECT}/${DEPLOY_ENV}): ${APPS} → sha-${GITHUB_SHA::7} [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase origin "$INFRA_BRANCH" && git push origin "HEAD:$INFRA_BRANCH" && exit 0
+            sleep $((i * 5))
+          done
+          exit 1

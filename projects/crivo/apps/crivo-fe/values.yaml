@@ -1,0 +1,33 @@
+# crivo-fe (Next.js) — valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+#
+# A URL da API (NEXT_PUBLIC_API_URL) é embutida no build da imagem como
+# http://crivo-be:8080 — o Service do crivo-be no MESMO namespace. Funciona em
+# qualquer ambiente porque o front só chama a API pelo servidor (Server Actions
+# e middleware), nunca pelo navegador.
+
+image:
+  repository: ghcr.io/geraldobl58/crivo/crivo-fe
+  pullPolicy: IfNotPresent
+
+service:
+  port: 3000
+
+# "/" redireciona para o login (3xx) — o kubelet conta 2xx/3xx como sucesso.
+livenessProbe:
+  path: /
+readinessProbe:
+  path: /
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 50m
+    memory: 160Mi
+
+env:
+  PORT: "3000"
+  NODE_ENV: production
