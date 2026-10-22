@@ -113,6 +113,8 @@ log_step "ETAPA 1.5/7: NGINX Ingress Controller"
 
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
 helm repo update
+# hostPort 80/443: o pod novo só sobe depois que o antigo libera as portas, por
+# isso maxSurge=0 (sem isso o upgrade trava em "Pending termination").
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace kube-system \
   --set controller.publishService.enabled=true \
@@ -121,6 +123,9 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --set controller.hostPort.enabled=true \
   --set controller.hostPort.ports.http=80 \
   --set controller.hostPort.ports.https=443 \
+  --set controller.updateStrategy.rollingUpdate.maxSurge=0 \
+  --set controller.updateStrategy.rollingUpdate.maxUnavailable=1 \
+  --set controller.metrics.enabled=true \
   --set 'controller.nodeSelector.kubernetes\.io/os=linux' \
   --timeout 5m --wait
 
@@ -190,7 +195,7 @@ echo -e "${GREEN}✓ ArgoCD instalado - admin / $ARGOCD_PASSWORD${NC}"
 # ==============================================================================
 # ETAPA 4: Observabilidade (Prometheus + Grafana)
 # ==============================================================================
-log_step "ETAPA 4/7: Observabilidade (Prometheus + Grafana)"
+log_step "ETAPA 4/7: Observabilidade (Prometheus, Grafana, Loki)"
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
 helm repo update
@@ -261,6 +266,9 @@ kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=grafana \
   --namespace=monitoring --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."
 echo -e "${GREEN}✓ Grafana instalado - admin / devops.local2026${NC}"
+
+# Métricas do Ingress (requests/status/latência), Loki e Alloy (logs dos apps).
+bash "$SCRIPT_DIR/scripts/setup-observability.sh"
 
 # ==============================================================================
 # ETAPA 5: Projetos (namespaces, dependências, secrets) + plataforma GitOps

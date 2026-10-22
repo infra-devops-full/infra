@@ -5,7 +5,8 @@
 # Aplica os manifests genéricos da plataforma:
 #   argocd/*.yaml  AppProject + ApplicationSet que descobrem os projetos no Git
 #                  (renderizados com envsubst: ${INFRA_REPO_URL} ${INFRA_BRANCH})
-#   k8s/*.yaml     manifests de plataforma (dashboards do Grafana, ...)
+#   k8s/*.yaml     manifests de plataforma (dashboards e datasources do Grafana)
+#                  (renderizados com envsubst: ${INFRA_RAW_URL})
 #
 # Uso:
 #   ./scripts/apply-platform.sh            # aplica
@@ -25,7 +26,10 @@ source "$SCRIPT_DIR/lib-project.sh"
 
 INFRA_REPO_URL="$(infra_repo_url)"
 INFRA_BRANCH="${INFRA_BRANCH:-main}"
-export INFRA_REPO_URL INFRA_BRANCH
+# Arquivos do repo de infra servidos pelo GitHub (logos dos projetos no Grafana).
+INFRA_SLUG="$(sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##; s#/$##' <<<"$INFRA_REPO_URL")"
+INFRA_RAW_URL="https://raw.githubusercontent.com/${INFRA_SLUG}/${INFRA_BRANCH}"
+export INFRA_REPO_URL INFRA_BRANCH INFRA_RAW_URL
 
 if [[ -z "$INFRA_REPO_URL" ]]; then
   echo "❌ INFRA_REPO_URL vazio (defina no .env ou configure o git remote origin)"
@@ -38,9 +42,11 @@ render() {
     echo "---"
     envsubst '${INFRA_REPO_URL} ${INFRA_BRANCH}' < "$f"
   done
+  # Só ${INFRA_RAW_URL} é substituído: as variáveis do Grafana ($app,
+  # ${project}...) passam intactas.
   for f in "$INFRA_ROOT"/k8s/*.yaml; do
     echo "---"
-    cat "$f"
+    envsubst '${INFRA_RAW_URL}' < "$f"
   done
 }
 

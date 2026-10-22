@@ -1,7 +1,12 @@
 # =============================================================================
-# Dashboard genérico do Grafana: recursos de qualquer app de qualquer projeto.
-# Variáveis: namespace (<projeto>-<env>) e app (Deployment). Aplicado pelo
-# setup.sh; o sidecar do Grafana carrega todo ConfigMap com grafana_dashboard=1.
+# Dashboard genérico do Grafana: "Platform / Apps".
+# Filtros: Projeto → Ambiente → App. Seções:
+#   cabeçalho  logo do projeto (projects/<p>/logo.png no repo de infra) + KPIs
+#   requests   métricas do NGINX Ingress (taxa, status HTTP, latência p95)
+#   logs       erros dos apps via Loki (coletados pelo Alloy)
+#   recursos   CPU, memória, rede e restarts (cAdvisor / kube-state-metrics)
+# ${INFRA_RAW_URL} é preenchido por scripts/apply-platform.sh (envsubst).
+# O sidecar do Grafana carrega todo ConfigMap com grafana_dashboard=1.
 # =============================================================================
 apiVersion: v1
 kind: ConfigMap
@@ -21,130 +26,606 @@ data:
         "platform",
         "apps"
       ],
-      "timezone": "America/Sao_Paulo",
       "editable": true,
-      "graphTooltip": 1,
+      "schemaVersion": 39,
       "time": {
         "from": "now-1h",
         "to": "now"
       },
-      "refresh": "10s",
+      "refresh": "30s",
       "templating": {
         "list": [
           {
-            "name": "namespace",
-            "label": "Projeto-ambiente",
+            "name": "project",
+            "label": "Projeto",
             "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
             "query": {
-              "query": "label_values(kube_deployment_created, namespace)",
-              "refId": "ns"
+              "query": "label_values(kube_namespace_created, namespace)",
+              "refId": "project"
             },
-            "regex": "/^(?!kube-system|kube-public|kube-node-lease|monitoring|argocd|default|tooling).*$/",
-            "includeAll": true,
-            "multi": true,
-            "current": {
-              "text": "All",
-              "value": "$__all"
-            },
+            "regex": "/^(?!kube-|monitoring$|argocd$|default$|tooling$|local-path-storage$)(.+)-[^-]+$/",
             "refresh": 2,
-            "sort": 1
+            "sort": 1,
+            "multi": false,
+            "includeAll": false
+          },
+          {
+            "name": "env",
+            "label": "Ambiente",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": {
+              "query": "label_values(kube_namespace_created{namespace=~\"$project-.*\"}, namespace)",
+              "refId": "env"
+            },
+            "regex": "/^$project-([^-]+)$/",
+            "refresh": 2,
+            "sort": 1,
+            "multi": false,
+            "includeAll": false
           },
           {
             "name": "app",
             "label": "App",
             "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
             "query": {
-              "query": "label_values(kube_deployment_created{namespace=~\"$namespace\"}, deployment)",
+              "query": "label_values(kube_deployment_created{namespace=\"$project-$env\"}, deployment)",
               "refId": "app"
             },
-            "includeAll": true,
+            "refresh": 2,
+            "sort": 1,
             "multi": true,
+            "includeAll": true,
             "current": {
               "text": "All",
               "value": "$__all"
-            },
-            "refresh": 2,
-            "sort": 1
+            }
           }
         ]
       },
       "panels": [
         {
+          "type": "text",
+          "title": "",
+          "transparent": true,
+          "options": {
+            "mode": "html",
+            "content": "<div style=\"display:flex;align-items:center;gap:20px;height:100%;padding:4px 8px\"><img src=\"${INFRA_RAW_URL}/projects/${project}/logo.png\" alt=\"${project}\" style=\"height:84px;max-width:170px;object-fit:contain;border-radius:10px\"/><div><div style=\"font-size:28px;font-weight:600;line-height:1.2\">${project}</div><div style=\"opacity:.75;font-size:14px\">ambiente <b>${env}</b> · namespace <code>${project}-${env}</code></div></div></div>"
+          },
           "id": 1,
-          "title": "Status",
-          "type": "stat",
           "gridPos": {
-            "h": 4,
-            "w": 6,
             "x": 0,
-            "y": 0
+            "y": 0,
+            "w": 8,
+            "h": 5
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Pods rodando",
+          "description": "Pods em Running dos apps selecionados (kube-state-metrics).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
           },
           "targets": [
             {
-              "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", pod=~\"($app)-.*\", phase=\"Running\"})",
-              "legendFormat": "Running Pods",
-              "refId": "A"
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(kube_pod_status_phase{namespace=\"$project-$env\", pod=~\"($app)-.*\", phase=\"Running\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
+              "unit": "none",
               "thresholds": {
+                "mode": "absolute",
                 "steps": [
                   {
                     "color": "red",
-                    "value": 0
+                    "value": null
                   },
                   {
                     "color": "green",
                     "value": 1
                   }
                 ]
+              },
+              "color": {
+                "mode": "thresholds"
               }
-            }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "id": 2,
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 5
           }
         },
         {
-          "id": 2,
-          "title": "Réplicas",
           "type": "stat",
-          "gridPos": {
-            "h": 4,
-            "w": 18,
-            "x": 6,
-            "y": 0
+          "title": "Requests/s",
+          "description": "Requests por segundo que chegaram pelo Ingress aos apps selecionados.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
           },
           "targets": [
             {
-              "expr": "kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=~\"$app\"}",
-              "legendFormat": "{{ namespace }}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(rate(nginx_ingress_controller_requests{exported_namespace=\"$project-$env\", ingress=~\"$app\"}[$__rate_interval])) or vector(0)",
+              "legendFormat": "",
               "refId": "A"
             }
           ],
           "fieldConfig": {
             "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
               "color": {
-                "mode": "palette-classic"
-              }
-            }
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "id": 3,
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 4,
+            "h": 5
           }
         },
         {
-          "id": 3,
-          "title": "CPU Usage",
-          "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 4
+          "type": "stat",
+          "title": "Erros 5xx",
+          "description": "Percentual de respostas 5xx entre todas as requests no Ingress.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
           },
           "targets": [
             {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"($app)-.*\", container!=\"\", container!=\"POD\"}[5m])) by (namespace, pod)",
-              "legendFormat": "{{ namespace }} / {{ pod }}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(sum(rate(nginx_ingress_controller_requests{exported_namespace=\"$project-$env\", ingress=~\"$app\", status=~\"5..\"}[$__rate_interval])) or vector(0)) / (sum(rate(nginx_ingress_controller_requests{exported_namespace=\"$project-$env\", ingress=~\"$app\"}[$__rate_interval])) > 0) * 100 or vector(0)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "id": 4,
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 4,
+            "h": 5
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Erros no log",
+          "description": "Linhas de log com error/exception/fatal/panic no período selecionado (Loki).",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({namespace=\"$project-$env\", app=~\"$app\"} |~ `(?i)\\b(error|exception|fatal|panic)\\b` [$__range])) or vector(0)",
+              "queryType": "instant",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 20
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "background",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "id": 5,
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 5
+          }
+        },
+        {
+          "type": "row",
+          "title": "Requests (NGINX Ingress)",
+          "collapsed": false,
+          "panels": [],
+          "id": 6,
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Requests/s por app",
+          "description": "Tráfego que entra por cada Ingress (cada app/mfe tem o seu).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (ingress) (rate(nginx_ingress_controller_requests{exported_namespace=\"$project-$env\", ingress=~\"$app\"}[$__rate_interval]))",
+              "legendFormat": "{{ingress}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 7,
+          "gridPos": {
+            "x": 0,
+            "y": 6,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Respostas por status HTTP",
+          "description": "2xx sucesso · 3xx redirect · 4xx erro do cliente · 5xx erro do servidor.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (status_class) (label_replace(rate(nginx_ingress_controller_requests{exported_namespace=\"$project-$env\", ingress=~\"$app\"}[$__rate_interval]), \"status_class\", \"${1}xx\", \"status\", \"(\\\\d).*\"))",
+              "legendFormat": "{{status_class}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 8,
+          "gridPos": {
+            "x": 12,
+            "y": 6,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Latência p95 por app",
+          "description": "95% das requests respondem abaixo deste tempo (medido no Ingress).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le, ingress) (rate(nginx_ingress_controller_request_duration_seconds_bucket{exported_namespace=\"$project-$env\", ingress=~\"$app\"}[$__rate_interval])))",
+              "legendFormat": "{{ingress}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 9,
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Erros 4xx/5xx por app",
+          "description": "Requests com erro, por app e código de status.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (ingress, status) (rate(nginx_ingress_controller_requests{exported_namespace=\"$project-$env\", ingress=~\"$app\", status=~\"[45]..\"}[$__rate_interval]))",
+              "legendFormat": "{{ingress}} {{status}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 10,
+          "gridPos": {
+            "x": 12,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "row",
+          "title": "Logs de erro (Loki)",
+          "collapsed": false,
+          "panels": [],
+          "id": 11,
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Erros no log por app",
+          "description": "Quantidade de linhas com error/exception/fatal/panic.",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (app) (count_over_time({namespace=\"$project-$env\", app=~\"$app\"} |~ `(?i)\\b(error|exception|fatal|panic)\\b` [$__auto]))",
+              "legendFormat": "{{app}}",
+              "queryType": "range",
               "refId": "A"
             }
           ],
@@ -152,145 +633,403 @@ data:
             "defaults": {
               "unit": "short",
               "custom": {
-                "fillOpacity": 10,
-                "showPoints": "never"
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
               }
-            }
-          }
-        },
-        {
-          "id": 4,
-          "title": "Memory Usage",
-          "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 4
-          },
-          "targets": [
-            {
-              "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"($app)-.*\", container!=\"\", container!=\"POD\"}) by (namespace, pod) / 1024 / 1024",
-              "legendFormat": "{{ namespace }} / {{ pod }}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "decmbytes",
-              "custom": {
-                "fillOpacity": 10,
-                "showPoints": "never"
-              }
-            }
-          }
-        },
-        {
-          "id": 5,
-          "title": "Network RX",
-          "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 12
-          },
-          "targets": [
-            {
-              "expr": "sum(rate(container_network_receive_bytes_total{namespace=~\"$namespace\", pod=~\"($app)-.*\"}[5m])) by (namespace, pod)",
-              "legendFormat": "{{ namespace }} / {{ pod }}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "Bps",
-              "custom": {
-                "fillOpacity": 10,
-                "showPoints": "never"
-              }
-            }
-          }
-        },
-        {
-          "id": 6,
-          "title": "Network TX",
-          "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 12
-          },
-          "targets": [
-            {
-              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=~\"$namespace\", pod=~\"($app)-.*\"}[5m])) by (namespace, pod)",
-              "legendFormat": "{{ namespace }} / {{ pod }}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "Bps",
-              "custom": {
-                "fillOpacity": 10,
-                "showPoints": "never"
-              }
-            }
-          }
-        },
-        {
-          "id": 7,
-          "title": "Pod Restarts",
-          "type": "timeseries",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 20
-          },
-          "targets": [
-            {
-              "expr": "increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"($app)-.*\"}[30m])",
-              "legendFormat": "{{ namespace }} / {{ pod }}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "fillOpacity": 10,
-                "showPoints": "never"
-              }
-            }
-          }
-        },
-        {
-          "id": 8,
-          "title": "CPU vs Memória",
-          "type": "bargauge",
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 20
-          },
-          "targets": [
-            {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"($app)-.*\", container!=\"\", container!=\"POD\"}[5m])) by (namespace) * 1000",
-              "legendFormat": "{{ namespace }} CPU (mCores)",
-              "refId": "A"
             },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 12,
+          "gridPos": {
+            "x": 0,
+            "y": 23,
+            "w": 24,
+            "h": 7
+          }
+        },
+        {
+          "type": "logs",
+          "title": "Logs de erro",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
             {
-              "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"($app)-.*\", container!=\"\", container!=\"POD\"}) by (namespace) / 1024 / 1024",
-              "legendFormat": "{{ namespace }} MEM (Mi)",
-              "refId": "B"
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{namespace=\"$project-$env\", app=~\"$app\"} |~ `(?i)\\b(error|exception|fatal|panic)\\b`",
+              "queryType": "range"
             }
           ],
           "options": {
-            "orientation": "horizontal",
-            "displayMode": "gradient"
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none"
+          },
+          "id": 13,
+          "gridPos": {
+            "x": 0,
+            "y": 30,
+            "w": 24,
+            "h": 12
+          }
+        },
+        {
+          "type": "row",
+          "title": "Recursos (CPU, memória, rede)",
+          "collapsed": false,
+          "panels": [],
+          "id": 14,
+          "gridPos": {
+            "x": 0,
+            "y": 42,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "CPU",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$project-$env\", pod=~\"($app)-.*\", container!=\"\", container!=\"POD\"}[$__rate_interval]))",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "cores",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 15,
+          "gridPos": {
+            "x": 0,
+            "y": 43,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Memória",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$project-$env\", pod=~\"($app)-.*\", container!=\"\", container!=\"POD\"})",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 16,
+          "gridPos": {
+            "x": 12,
+            "y": 43,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Rede RX",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=\"$project-$env\", pod=~\"($app)-.*\"}[$__rate_interval]))",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 17,
+          "gridPos": {
+            "x": 0,
+            "y": 51,
+            "w": 8,
+            "h": 7
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Rede TX",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (pod) (rate(container_network_transmit_bytes_total{namespace=\"$project-$env\", pod=~\"($app)-.*\"}[$__rate_interval]))",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 18,
+          "gridPos": {
+            "x": 8,
+            "y": 51,
+            "w": 8,
+            "h": 7
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Restarts",
+          "description": "Reinícios de container na última hora (crash, OOM, probe falhando).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$project-$env\", pod=~\"($app)-.*\"}[1h]))",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 1,
+                "fillOpacity": 15,
+                "showPoints": "never",
+                "spanNulls": true
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "id": 19,
+          "gridPos": {
+            "x": 16,
+            "y": 51,
+            "w": 8,
+            "h": 7
+          }
+        },
+        {
+          "type": "row",
+          "title": "Todos os logs",
+          "collapsed": true,
+          "panels": [
+            {
+              "id": 21,
+              "type": "logs",
+              "title": "Logs (todos os níveis)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 59,
+                "w": 24,
+                "h": 14
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "{namespace=\"$project-$env\", app=~\"$app\"}",
+                  "queryType": "range"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "enableLogDetails": true,
+                "sortOrder": "Descending",
+                "dedupStrategy": "none"
+              }
+            }
+          ],
+          "id": 20,
+          "gridPos": {
+            "x": 0,
+            "y": 58,
+            "w": 24,
+            "h": 1
           }
         }
-      ]
+      ],
+      "annotations": {
+        "list": []
+      }
     }

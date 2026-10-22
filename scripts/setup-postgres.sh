@@ -157,7 +157,9 @@ spec:
             - containerPort: 5432
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "${PG_USER}"]
+              # -d explícito: sem ele o pg_isready conecta num banco com o nome
+              # do usuário e, se não existir, o Postgres loga um FATAL a cada probe.
+              command: ["pg_isready", "-U", "${PG_USER}", "-d", "${PG_DB}"]
             initialDelaySeconds: 10
             periodSeconds: 5
           resources:

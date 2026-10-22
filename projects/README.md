@@ -8,6 +8,7 @@ completo está no [README principal](../README.md#4-adicionar-um-projeto-novo-pa
 ```
 projects/<projeto>/                  # nome da pasta = nome do projeto
 ├── project.yaml                     # dependências: database / redis / rabbitmq
+├── logo.png                         # logo no dashboard do Grafana (PNG)
 ├── secrets/
 │   ├── example.env                  # valores fictícios de lab (versionado)
 │   └── <env>.env                    # valores reais (gitignored, opcional)
@@ -35,6 +36,7 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 ## Checklist de um projeto novo
 
 - [ ] `project.yaml` (mesmo vazio)
+- [ ] `logo.png` (PNG, ~256px), exibido no dashboard do Grafana
 - [ ] `apps/<app>/values.yaml` com `image.repository` igual à imagem que o CI publica
 - [ ] `service.port` igual à porta que o container escuta
 - [ ] `apps/<app>/values-<env>.yaml` para cada ambiente, com `image.tag`

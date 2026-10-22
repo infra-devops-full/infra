@@ -33,6 +33,7 @@ GitHub Actions ── build ──► ghcr.io/<owner>/<repo>/<app>:sha-xxxxxxx
 ```
 projects/<projeto>/
 ├── project.yaml                  # dependências: database, redis, rabbitmq
+├── logo.png                      # logo no dashboard do Grafana (PNG, ~256px)
 ├── secrets/example.env           # segredos de lab (opcional)
 └── apps/<app>/
     ├── values.yaml               # imagem, porta, probes, env, envFrom
@@ -532,12 +533,14 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 ├── charts/app/                   # chart Helm genérico
 ├── k8s/                          # dashboards e manifests da plataforma
 ├── config/                       # k3d-config.tmpl.yaml, storage-class.yaml
+│   └── observability/            # values do Loki e do Alloy
 ├── scripts/
 │   ├── lib-project.sh            # descoberta de projetos/apps/ambientes
 │   ├── apply-project.sh          # namespaces + dependências + secrets
 │   ├── apply-platform.sh         # argocd/ + k8s/
 │   ├── apply-secrets.sh          # Secret app-secrets
 │   ├── setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh
+│   ├── setup-observability.sh    # métricas do Ingress + Loki + Alloy
 │   ├── hosts.sh                  # bloco isolado no /etc/hosts
 │   ├── doctor.sh                 # confere tokens, variáveis, GitHub e Docker
 │   ├── github-bootstrap.sh       # develop + deploy key + proteção da main nos apps
@@ -562,6 +565,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 | `*.local` não resolve | cache mDNS do macOS | `make hosts`, ou `curl --resolve host:80:127.0.0.1` |
 | Job `deploy` do CI: `INFRA_DEPLOY_KEY ausente` | o repo do app ainda não foi configurado | `make github PROJECT=<p>` |
 | Job `deploy` do CI: `could not read Username` / `Permission denied (publickey)` | credencial do repo de infra inválida (PAT antigo, deploy key apagada ou só leitura) | `make github PROJECT=<p> ARGS=--rotate` |
+| Dashboard "No data" logo após reiniciar o Docker | os nodes do k3d voltam com IP novo e o Prometheus leva alguns minutos para coletar de novo | aguardar 2 a 5 min (ou `make restart` e aguardar) |
 | Docker usando muita CPU | muitos nodes k3d, ou Kubernetes do Docker Desktop ligado em paralelo | veja a [seção 9](#9-cpu-e-memória) |
 | Job `deploy` do CI falha no `git push` | deploy key sem escrita, ou proteção na `main` do repo de infra bloqueando | `make github ARGS=--rotate`; não proteja a `main` do repo de infra |
 
@@ -584,6 +588,7 @@ O lab é dimensionado para rodar num Mac sem travar:
 | Prometheus | scrape a cada 60s, retenção 3d, limite de 500m CPU | o default (30s, 7d) é para produção |
 | Alvos que o k3s não expõe | etcd, scheduler, controller-manager e kube-proxy **desligados** | coletá-los só gerava scrape falhando e alerta falso |
 | ArgoCD | Dex (SSO) e notifications **desligados** | não são usados no lab |
+| Loki + Alloy | Loki single-binary (1 pod, sem caches) e Alloy com 1 réplica | o default do Loki é distribuído (9 pods + memcached). Juntos usam ~250 MB |
 
 O que você ajusta na sua máquina:
 
@@ -606,4 +611,44 @@ make pods                           # o que está rodando nos projetos
 ```
 
 No Grafana: *Kubernetes / Compute Resources / Cluster* e *Platform / Apps*.
+
+## 10. Observabilidade (Grafana)
+
+http://grafana.devops.local, pasta **Platform**, dashboard **Platform / Apps**.
+Os filtros são **Projeto → Ambiente → App** e preenchem sozinhos a partir do
+que está no cluster.
+
+| Seção | O que mostra | De onde vem |
+| ----- | ------------ | ----------- |
+| Cabeçalho | logo do projeto + pods rodando, requests/s, % de 5xx, erros no log | `projects/<p>/logo.png` (via GitHub) e as fontes abaixo |
+| Requests | requests/s por app, respostas por status (2xx/3xx/4xx/5xx), latência p95, erros 4xx/5xx por app | métricas do **NGINX Ingress**, sem instrumentar os apps |
+| Logs de erro | quantidade de erros por app e as linhas com `error`, `exception`, `fatal` ou `panic` | **Loki**, com logs coletados pelo **Alloy** |
+| Recursos | CPU, memória, rede e restarts por pod | cAdvisor e kube-state-metrics |
+| Todos os logs (recolhido) | todos os logs dos apps selecionados | Loki |
+
+Como funciona:
+
+- **Requests:** cada app tem o seu Ingress, então as métricas saem por app e
+  separam até os microfrontends que dividem o mesmo host (`/catalog`,
+  `/pricing`). Só aparece o tráfego que passa pelo Ingress, não as chamadas
+  internas entre Services.
+- **Logs:** o Alloy lê os logs dos pods dos namespaces dos projetos e manda
+  para o Loki com os labels `project`, `env`, `app`, `pod` e `container`. A
+  retenção é de 3 dias, e os logs são voláteis como o resto do lab. No
+  *Explore* do Grafana dá para consultar direto, por exemplo
+  `{project="wlstore", app="catalog-service"} |= "Exception"`.
+- **Logo:** o painel carrega `projects/<projeto>/logo.png` do GitHub
+  (`raw.githubusercontent.com`), então ela só aparece depois do push. Use
+  **PNG**, porque o GitHub serve SVG como texto e o navegador não exibe.
+  Projeto sem logo mostra só o nome.
+
+Instalação: o `make setup` já instala tudo. Num cluster existente, use:
+
+```bash
+make observability   # métricas do Ingress + Loki + Alloy + dashboard e datasource
+```
+
+Arquivos: `scripts/setup-observability.sh`,
+`config/observability/{loki,alloy}-values.yaml`,
+`k8s/grafana-dashboard-apps.yaml` e `k8s/grafana-datasource-loki.yaml`.
 

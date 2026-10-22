@@ -1,0 +1,83 @@
+# =============================================================================
+# Grafana Alloy (grafana/alloy) — coleta os logs dos pods dos PROJETOS e envia
+# para o Loki. Aplicado por scripts/setup-observability.sh.
+#
+# Lê os logs pela API do Kubernetes (loki.source.kubernetes): não precisa
+# montar /var/log do host, o que funciona igual no k3d e em cluster gerenciado.
+# Por isso roda como Deployment de 1 réplica — num DaemonSet cada pod leria
+# todos os logs do cluster (duplicados).
+#
+# Labels gerados (usados no dashboard "Platform / Apps"):
+#   namespace  <projeto>-<env>
+#   project    <projeto>       env  <env>
+#   app        label app.kubernetes.io/name do pod (ou `app`) — o nome do app
+#   pod, container
+# =============================================================================
+controller:
+  type: deployment
+  replicas: 1
+
+alloy:
+  resources:
+    requests: { cpu: 20m, memory: 96Mi }
+    limits: { cpu: 300m, memory: 256Mi }
+  configMap:
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Só os namespaces dos projetos: fora a infra da plataforma.
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          regex         = "kube-.*|monitoring|argocd|default|tooling|local-path-storage"
+          action        = "drop"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        // <projeto>-<env>: o último "-" separa o ambiente (nest-rabbitmq-develop).
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          regex         = "(.+)-([^-]+)"
+          target_label  = "project"
+          replacement   = "$1"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          regex         = "(.+)-([^-]+)"
+          target_label  = "env"
+          replacement   = "$2"
+        }
+        // app = app.kubernetes.io/name (apps do chart) ou `app` (postgres,
+        // redis, rabbitmq) — o primeiro que existir.
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name", "__meta_kubernetes_pod_label_app"]
+          separator     = ";"
+          regex         = ";*([^;]+).*"
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }

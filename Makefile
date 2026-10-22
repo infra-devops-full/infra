@@ -1,6 +1,6 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus argocd \
         secrets ghcr helm-lint helm-template apply-argocd render-platform postgres \
-        projects project-apply doctor github hosts pods apps describe events rollout shell pf refresh
+        projects project-apply doctor github observability hosts pods apps describe events rollout shell pf refresh
 
 # Cores
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -134,6 +134,10 @@ github: ## Configura o GitHub dos apps (develop, deploy key, proteção da main)
 
 hosts: ## Regrava o bloco da plataforma no /etc/hosts (sudo). Ver antes: ./scripts/hosts.sh show
 	@./scripts/hosts.sh apply
+
+observability: ## Instala/atualiza métricas do Ingress, Loki e Alloy + dashboard (cluster existente)
+	@./scripts/setup-observability.sh
+	@./scripts/apply-platform.sh
 
 apply-argocd: ## (Re)aplica a plataforma genérica: argocd/ + k8s/
 	@./scripts/apply-platform.sh
