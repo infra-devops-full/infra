@@ -1,5 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 image:
-  tag: sha-8e6b3c2
+  tag: sha-b2f5c16
 ingress:
   host: develop.crivo.local # domínio do projeto: o front responde na raiz
