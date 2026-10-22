@@ -81,7 +81,8 @@ project_app_values() {
 # chart. Vazio se ingress.enabled=false.
 project_app_host() {
   local vals; vals="$(project_app_values "$1" "$2" "$3")"
-  [[ "$(yq -r '.ingress.enabled // true' <<<"$vals")" == "true" ]] || return 0
+  # Não usar `.ingress.enabled // true`: o `//` do yq trata false como ausente.
+  [[ "$(yq -r '.ingress.enabled == false' <<<"$vals")" == "true" ]] && return 0
   local host; host="$(yq -r '.ingress.host // ""' <<<"$vals")"
   echo "${host:-$3.$2.$1.local}"
 }

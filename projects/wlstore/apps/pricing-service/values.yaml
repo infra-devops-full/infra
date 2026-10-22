@@ -1,0 +1,46 @@
+# pricing-service (Spring Boot 4, Java 21) — valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+
+image:
+  # Publicada pelo CI do repo wlstore: wlstore-be/Dockerfile com SERVICE=pricing-service.
+  repository: ghcr.io/geraldobl58/wlstore/pricing-service
+  pullPolicy: IfNotPresent
+
+service:
+  # server.port do application.yaml.
+  port: 8082
+
+# Não há actuator: o /v3/api-docs (springdoc) responde 200 quando a app está
+# de pé (o Flyway migra o banco antes, no start).
+livenessProbe:
+  path: /v3/api-docs
+  initialDelaySeconds: 60
+  timeoutSeconds: 5
+readinessProbe:
+  path: /v3/api-docs
+  initialDelaySeconds: 20
+  timeoutSeconds: 5
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+  requests:
+    cpu: 50m
+    memory: 384Mi
+
+# $(VAR) é expandido pelo Kubernetes com as chaves dos Secrets do envFrom.
+# O banco pricingdb é um extraDbs do mesmo Postgres do projeto.
+env:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/pricingdb"
+  SPRING_DATASOURCE_USERNAME: "$(DB_USER)"
+  SPRING_DATASOURCE_PASSWORD: "$(DB_PASSWORD)"
+  SPRING_RABBITMQ_HOST: "$(RABBITMQ_HOST)"
+  SPRING_RABBITMQ_PORT: "$(RABBITMQ_PORT)"
+  SPRING_RABBITMQ_USERNAME: "$(RABBITMQ_USER)"
+  SPRING_RABBITMQ_PASSWORD: "$(RABBITMQ_PASSWORD)"
+
+envFrom:
+  - secretRef: postgres
+  - secretRef: rabbitmq

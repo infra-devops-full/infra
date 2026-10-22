@@ -3,7 +3,8 @@
 # setup-rabbitmq.sh  (genérico)
 # -----------------------------------------------------------------------------
 # Cria RabbitMQ (com management UI) em um namespace:
-#   - Secret rabbitmq  (RABBITMQ_URL, RABBITMQ_USER, RABBITMQ_PASSWORD)
+#   - Secret rabbitmq  (RABBITMQ_URL, RABBITMQ_HOST, RABBITMQ_PORT, RABBITMQ_USER,
+#                       RABBITMQ_PASSWORD)
 #   - Service rabbitmq (5672 AMQP, 15672 management)
 #   - Deployment rabbitmq com emptyDir (volátil — mesmo trade-off do Postgres)
 #
@@ -38,6 +39,8 @@ kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
 
 kubectl -n "$NS" create secret generic rabbitmq \
   --from-literal=RABBITMQ_URL="amqp://${RMQ_USER}:${RMQ_PASS}@rabbitmq.${NS}.svc.cluster.local:5672" \
+  --from-literal=RABBITMQ_HOST="rabbitmq.${NS}.svc.cluster.local" \
+  --from-literal=RABBITMQ_PORT="5672" \
   --from-literal=RABBITMQ_USER="${RMQ_USER}" \
   --from-literal=RABBITMQ_PASSWORD="${RMQ_PASS}" \
   --dry-run=client -o yaml | kubectl apply -f -

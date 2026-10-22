@@ -1,0 +1,35 @@
+# =============================================================================
+# Projeto: wlstore
+# -----------------------------------------------------------------------------
+# Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
+#   apps/catalog-service/  Spring Boot (porta 8081, banco catalogdb, Flyway)
+#   apps/pricing-service/  Spring Boot (porta 8082, banco pricingdb, Flyway)
+#   apps/shell/            Next.js host (porta 3000, proxy /blog → catalog-mfe)
+#   apps/catalog-mfe/      Next.js microfrontend (porta 4200, basePath /blog)
+# catalog ↔ pricing trocam eventos pelo RabbitMQ (catalog.events / pricing.events).
+# → namespaces wlstore-develop / wlstore-prod
+# → hosts <env>.<app>.wlstore.local (catalog-mfe sem ingress: entra pelo shell)
+#
+# Serviços ainda não implementados (identity, inventory, notification, order,
+# payment, discovery-server) ficam de fora: para incluir um, crie
+# apps/<serviço>/ com values.yaml + values-<env>.yaml e o banco em extraDbs.
+# =============================================================================
+
+# Código da aplicação (documentação — quem builda é o CI desse repo).
+appRepo: https://github.com/geraldobl58/wlstore
+
+# Um Postgres por ambiente, um banco por serviço (database per service).
+# → Secret `postgres` com DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, JDBC_URL...
+database:
+  user: wlstore
+  password: wlstore_password
+  defaultDb: catalogdb
+  extraDbs:
+    - pricingdb
+
+# RabbitMQ por ambiente → Secret `rabbitmq` (RABBITMQ_HOST, RABBITMQ_PORT,
+# RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_URL).
+rabbitmq:
+  enabled: true
+  user: wlstore
+  password: wlstore_password

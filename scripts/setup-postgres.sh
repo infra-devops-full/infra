@@ -59,12 +59,23 @@ if $RESET; then
   kubectl delete deploy postgres -n "$NS" --ignore-not-found --wait=true
 fi
 
-# Connection string para as apps (envFrom: [{ secretRef: postgres }]).
-# DIRECT_URL = mesma URL: no cluster não há pooler (ex.: Supabase) no caminho.
-DB_URL="postgresql://${PG_USER}:${PG_PASS}@postgres.${NS}.svc.cluster.local:5432/${PG_DB}?schema=public"
+# Conexão para as apps (envFrom: [{ secretRef: postgres }]), em dois formatos:
+#   DATABASE_URL / DIRECT_URL  postgresql://… (Prisma, Node). DIRECT_URL = mesma
+#                              URL: no cluster não há pooler no caminho.
+#   JDBC_URL + DB_*            Java/Spring. Para outro banco do mesmo Postgres
+#                              (extraDbs), monte no values:
+#                              jdbc:postgresql://$(DB_HOST):$(DB_PORT)/<banco>
+DB_HOST="postgres.${NS}.svc.cluster.local"
+DB_URL="postgresql://${PG_USER}:${PG_PASS}@${DB_HOST}:5432/${PG_DB}?schema=public"
 kubectl -n "$NS" create secret generic postgres \
   --from-literal=DATABASE_URL="$DB_URL" \
   --from-literal=DIRECT_URL="$DB_URL" \
+  --from-literal=JDBC_URL="jdbc:postgresql://${DB_HOST}:5432/${PG_DB}" \
+  --from-literal=DB_HOST="$DB_HOST" \
+  --from-literal=DB_PORT="5432" \
+  --from-literal=DB_NAME="$PG_DB" \
+  --from-literal=DB_USER="$PG_USER" \
+  --from-literal=DB_PASSWORD="$PG_PASS" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # Monta o bloco SQL de bancos extras

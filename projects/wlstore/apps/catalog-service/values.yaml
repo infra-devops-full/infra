@@ -1,0 +1,48 @@
+# catalog-service (Spring Boot 4, Java 21) — valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+
+image:
+  # Publicada pelo CI do repo wlstore: wlstore-be/Dockerfile com SERVICE=catalog-service.
+  repository: ghcr.io/geraldobl58/wlstore/catalog-service
+  pullPolicy: IfNotPresent
+
+service:
+  # server.port do application.yaml.
+  port: 8081
+
+# Não há actuator: o /v3/api-docs (springdoc) responde 200 quando a app está
+# de pé (o Flyway migra o banco antes, no start).
+livenessProbe:
+  path: /v3/api-docs
+  initialDelaySeconds: 60
+  timeoutSeconds: 5
+readinessProbe:
+  path: /v3/api-docs
+  initialDelaySeconds: 20
+  timeoutSeconds: 5
+
+# JVM: ~350 MiB em uso; o heap vai até 75% do limite (JAVA_TOOL_OPTIONS da imagem).
+# CPU alta só no start (JIT + Flyway).
+resources:
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+  requests:
+    cpu: 50m
+    memory: 384Mi
+
+# $(VAR) é expandido pelo Kubernetes com as chaves dos Secrets do envFrom.
+env:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/catalogdb"
+  SPRING_DATASOURCE_USERNAME: "$(DB_USER)"
+  SPRING_DATASOURCE_PASSWORD: "$(DB_PASSWORD)"
+  SPRING_RABBITMQ_HOST: "$(RABBITMQ_HOST)"
+  SPRING_RABBITMQ_PORT: "$(RABBITMQ_PORT)"
+  SPRING_RABBITMQ_USERNAME: "$(RABBITMQ_USER)"
+  SPRING_RABBITMQ_PASSWORD: "$(RABBITMQ_PASSWORD)"
+  SPRING_JPA_SHOW_SQL: "false"
+
+envFrom:
+  - secretRef: postgres # DB_HOST, DB_PORT, DB_USER, DB_PASSWORD (database no project.yaml)
+  - secretRef: rabbitmq # RABBITMQ_HOST, RABBITMQ_PORT, ... (rabbitmq no project.yaml)

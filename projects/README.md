@@ -30,6 +30,7 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 | ------- | ------ |
 | [`crivo/`](crivo) | dois apps (API + front), Postgres, Redis, `app-secrets`, front chamando a API pelo Service interno |
 | [`nest-rabbitmq/`](nest-rabbitmq) | um app e RabbitMQ |
+| [`wlstore/`](wlstore) | microsserviços Spring (um banco por serviço via `extraDbs`, eventos pelo RabbitMQ, variáveis do Spring montadas com `$(VAR)`) e microfrontends Next em Nx (`catalog-mfe` sem ingress, acessado pelo `shell`) |
 
 ## Checklist de um projeto novo
 

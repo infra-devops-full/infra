@@ -1,0 +1,9 @@
+**/target
+**/.idea
+**/*.iml
+**/.mvn/wrapper/maven-wrapper.jar
+**/.env
+**/.env.*
+**/docker-compose*.y*ml
+**/HELP.md
+.git

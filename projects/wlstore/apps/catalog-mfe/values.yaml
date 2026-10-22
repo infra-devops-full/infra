@@ -1,0 +1,32 @@
+# catalog-mfe (Next.js, microfrontend do Nx) — valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+#
+# Serve tudo sob basePath /blog e é acessado PELO SHELL (proxy em
+# http://catalog-mfe:4200), por isso não tem ingress próprio. O nome da pasta
+# (= nome do Service) precisa continuar catalog-mfe.
+
+image:
+  # Publicada pelo CI do repo wlstore: wlstore-fe/Dockerfile com APP=catalog-mfe.
+  repository: ghcr.io/geraldobl58/wlstore/catalog-mfe
+  pullPolicy: IfNotPresent
+
+service:
+  port: 4200
+
+ingress:
+  enabled: false
+
+# basePath /blog: a raiz "/" responde 404.
+livenessProbe:
+  path: /blog
+readinessProbe:
+  path: /blog
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 384Mi
+  requests:
+    cpu: 20m
+    memory: 128Mi

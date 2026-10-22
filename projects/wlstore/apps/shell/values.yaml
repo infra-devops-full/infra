@@ -1,0 +1,29 @@
+# shell (Next.js, host do Nx) — valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+#
+# O proxy /blog → catalog-mfe usa BLOG_URL=http://catalog-mfe:4200, embutido no
+# BUILD da imagem (os rewrites do Next são resolvidos no build). Esse endereço é
+# o Service do catalog-mfe no MESMO namespace, então a imagem serve qualquer
+# ambiente.
+
+image:
+  # Publicada pelo CI do repo wlstore: wlstore-fe/Dockerfile com APP=shell.
+  repository: ghcr.io/geraldobl58/wlstore/shell
+  pullPolicy: IfNotPresent
+
+service:
+  port: 3000
+
+livenessProbe:
+  path: /
+readinessProbe:
+  path: /
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 384Mi
+  requests:
+    cpu: 20m
+    memory: 128Mi

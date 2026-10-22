@@ -59,6 +59,7 @@ Projetos incluídos:
 | ------- | ---- | ------------ |
 | [`crivo`](projects/crivo) | `crivo-be` (NestJS, :8080), `crivo-fe` (Next.js, :3000) | Postgres, Redis |
 | [`nest-rabbitmq`](projects/nest-rabbitmq) | `products` (NestJS, :3000) | RabbitMQ |
+| [`wlstore`](projects/wlstore) | `catalog-service` (Spring, :8081), `pricing-service` (Spring, :8082), `shell` (Next.js, :3000), `catalog-mfe` (Next.js, :4200) | Postgres (um banco por serviço), RabbitMQ |
 
 ---
 
@@ -188,6 +189,23 @@ Variáveis de cada projeto atual:
 | crivo / crivo-be | `PORT`, `NODE_ENV`, `SWAGGER_ENABLED`, `MESSAGING_PROVIDER`, `REMINDER_HOURS_BEFORE`, `PUBLIC_APP_URL`, `CORS_ORIGINS` | `JWT_SECRET`, `JWT_EXPIRES_IN_SECONDS`, `REFRESH_TOKEN_EXPIRES_IN_SECONDS`, `INBOUND_WEBHOOK_TOKEN`, `BULL_BOARD_*`, `EVOLUTION_*`, `META_*`, `DEEPSEEK_*`, `AI_TIMEOUT_MS`, `CLOUDINARY_*`, `STRIPE_*`, `SMTP_*`, `MAIL_FROM` (lista completa em [`example.env`](projects/crivo/secrets/example.env)) | `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` |
 | crivo / crivo-fe | `PORT`, `NODE_ENV` | — | — (a URL da API é embutida no build: `NEXT_PUBLIC_API_URL=http://crivo-be:8080`) |
 | nest-rabbitmq / products | `PORT`, `NODE_ENV` | — | `RABBITMQ_URL`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| wlstore / catalog-service, pricing-service | `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, montadas com `$(VAR)` (veja abaixo) | — | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| wlstore / shell, catalog-mfe | — | — | — (o `shell` acha o `catalog-mfe` por `BLOG_URL=http://catalog-mfe:4200`, embutido no build) |
+
+**Apps que esperam nomes próprios de variável (ex.: Spring).** Monte a variável
+no `env:` do values a partir das chaves dos Secrets, com `$(VAR)`. O Kubernetes
+expande o valor usando o que veio pelo `envFrom`:
+
+```yaml
+env:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/pricingdb"   # banco de extraDbs
+  SPRING_DATASOURCE_USERNAME: "$(DB_USER)"
+  SPRING_DATASOURCE_PASSWORD: "$(DB_PASSWORD)"
+  SPRING_RABBITMQ_HOST: "$(RABBITMQ_HOST)"
+envFrom:
+  - secretRef: postgres
+  - secretRef: rabbitmq
+```
 
 ## 3. Subir a plataforma
 
@@ -261,9 +279,9 @@ Secrets que a plataforma cria em cada namespace `<projeto>-<env>`:
 
 | `project.yaml` | Secret | Chaves |
 | -------------- | ------ | ------ |
-| `database: {user, password, defaultDb, extraDbs}` | `postgres` | `DATABASE_URL`, `DIRECT_URL` |
+| `database: {user, password, defaultDb, extraDbs}` | `postgres` | `DATABASE_URL`, `DIRECT_URL` (`postgresql://`, Prisma/Node), `JDBC_URL` (Java), `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` |
 | `redis: {enabled: true, password?}` | `redis` | `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
-| `rabbitmq: {enabled: true, user, password}` | `rabbitmq` | `RABBITMQ_URL`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| `rabbitmq: {enabled: true, user, password}` | `rabbitmq` | `RABBITMQ_URL`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
 | `secrets/<env>.env` (ou `example.env`) | `app-secrets` | as chaves do arquivo |
 | `GITHUB_TOKEN` no `.env` | `ghcr-secret` | pull de imagens do GHCR |
 
@@ -275,7 +293,9 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
 | Template | Para |
 | -------- | ---- |
 | [`templates/nestjs/`](templates/nestjs) | Dockerfile e `.dockerignore` de um app NestJS |
-| [`templates/nextjs/`](templates/nextjs) | Dockerfile e `.dockerignore` de um app Next.js |
+| [`templates/nextjs/`](templates/nextjs) | Dockerfile e `.dockerignore` de um app Next.js (npm) |
+| [`templates/nx-nextjs/`](templates/nx-nextjs) | monorepo Nx + pnpm com vários apps Next.js: um Dockerfile, o app vem de `--build-arg APP=` (variáveis de build em `BUILD_ENV`) |
+| [`templates/spring-maven/`](templates/spring-maven) | multi-módulo Maven com vários serviços Spring Boot: um Dockerfile, o serviço vem de `--build-arg SERVICE=`. O Maven roda nativo no build multi-arch |
 | [`templates/github/deploy.yml`](templates/github/deploy.yml) | CI: build, push no GHCR e commit da tag aqui |
 
 1. Copie o Dockerfile para a pasta do app e o `deploy.yml` para
@@ -445,7 +465,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── github-bootstrap.sh       # develop + deploy key + proteção da main nos apps
 │   └── 99-show-urls.sh
 ├── create-ghcr-secrets.sh
-├── templates/                    # nestjs/, nextjs/, github/deploy.yml
+├── templates/                    # nestjs/, nextjs/, nx-nextjs/, spring-maven/, github/deploy.yml
 └── projects/
     ├── crivo/
     └── nest-rabbitmq/
