@@ -70,6 +70,27 @@ INFRA_REPO="$(slug "$(infra_repo_url)")"
 echo -e "${CYAN}Repo de infra:${NC} $INFRA_REPO"
 [[ "$(gh api "repos/$INFRA_REPO" --jq .permissions.admin)" == "true" ]] || {
   echo "❌ seu usuário do gh não é admin de $INFRA_REPO (necessário p/ deploy keys)"; exit 1; }
+# Orgs novas vêm com deploy keys desligadas (política da org). Sem isso o
+# cadastro da chave falha com 422 "Deploy keys are disabled for this repository".
+INFRA_OWNER="${INFRA_REPO%%/*}"
+if [[ "$(gh api "users/$INFRA_OWNER" --jq .type)" == "Organization" ]]; then
+  if [[ "$(gh api "orgs/$INFRA_OWNER" --jq .deploy_keys_enabled_for_repositories)" == "false" ]]; then
+    echo -e "  ${YELLOW}⚠${NC} a org $INFRA_OWNER está com deploy keys desligadas — habilitando..."
+    if $DRY; then
+      echo -e "    ${CYAN}[dry-run]${NC} gh api -X PATCH orgs/$INFRA_OWNER -F deploy_keys_enabled_for_repositories=true" >&2
+    elif ! OUT="$(gh api -X PATCH "orgs/$INFRA_OWNER" -F deploy_keys_enabled_for_repositories=true 2>&1)"; then
+      fail "não consegui habilitar deploy keys na org $INFRA_OWNER: $(sed -n 's/.*"message":"\([^"]*\)".*/\1/p' <<<"$OUT" | head -1)"
+      echo "      Opção 1 (terminal): dê ao gh o escopo de admin da org e rode de novo:"
+      echo "        gh auth refresh -h github.com -s admin:org && make github"
+      echo "      Opção 2 (navegador): https://github.com/organizations/$INFRA_OWNER/settings"
+      echo "        → habilite 'Deploy keys' para os repositórios da org e rode make github"
+      exit 1
+    else
+      ok "deploy keys habilitadas na org $INFRA_OWNER"
+    fi
+  fi
+fi
+
 if gh api "repos/$INFRA_REPO/branches/${INFRA_BRANCH:-main}/protection" >/dev/null 2>&1; then
   warn "a branch ${INFRA_BRANCH:-main} de $INFRA_REPO tem proteção — garanta que deploy keys podem fazer push nela"
 fi
@@ -116,7 +137,12 @@ for PROJ in "${PROJECTS[@]}"; do
     [[ -n "$KEY_ID" ]] && run gh api -X DELETE "repos/$INFRA_REPO/keys/$KEY_ID" >/dev/null
     KEYFILE="$TMP/$PROJ"
     ssh-keygen -q -t ed25519 -N "" -C "$TITLE" -f "$KEYFILE"
-    run gh api -X POST "repos/$INFRA_REPO/keys" -f title="$TITLE" -f key="$(cat "$KEYFILE.pub")" -F read_only=false >/dev/null
+    if $DRY; then
+      run gh api -X POST "repos/$INFRA_REPO/keys" -f title="$TITLE" -f key="<chave pública>" -F read_only=false
+    elif ! OUT="$(gh api -X POST "repos/$INFRA_REPO/keys" -f title="$TITLE" -f key="$(cat "$KEYFILE.pub")" -F read_only=false 2>&1)"; then
+      fail "GitHub recusou a deploy key: $(grep -o '"message":"[^"]*"' <<<"$OUT" | tail -1 | cut -d'"' -f4)"
+      rm -f "$KEYFILE" "$KEYFILE.pub"; FAILED=1; continue
+    fi
     if $DRY; then
       echo -e "    ${CYAN}[dry-run]${NC} gh secret set INFRA_DEPLOY_KEY --repo $APP_REPO < chave-privada"
     else
