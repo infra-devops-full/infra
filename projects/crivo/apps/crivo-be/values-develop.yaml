@@ -1,7 +1,6 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 image:
-  tag: latest
-
+  tag: sha-8e6b3c2
 env:
   # Links enviados ao paciente e origem permitida apontam para o front do env.
   PUBLIC_APP_URL: http://develop.crivo-fe.crivo.local
