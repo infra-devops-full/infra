@@ -1,5 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
-  tag: sha-724da0f
+  tag: sha-6d77d1c
 ingress:
   host: prod.crivo.local # domínio do projeto: o front responde na raiz
