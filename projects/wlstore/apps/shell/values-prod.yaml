@@ -2,4 +2,4 @@
 image:
   tag: sha-2b6bf54
 ingress:
-  host: prod.wlstore.local # domínio único do projeto: o shell em /, cada mfe no seu basePath
+  host: wlstore.local # domínio único do projeto: o shell em /, cada mfe no seu basePath

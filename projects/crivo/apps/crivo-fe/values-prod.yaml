@@ -2,4 +2,4 @@
 image:
   tag: sha-6d77d1c
 ingress:
-  host: prod.crivo.local # domínio do projeto: o front responde na raiz
+  host: crivo.local # domínio do projeto: o front responde na raiz

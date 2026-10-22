@@ -2,4 +2,4 @@
 image:
   tag: sha-2b6bf54
 ingress:
-  host: prod.wlstore.local # mesmo host do shell; o Ingress manda /pricing para cá
+  host: wlstore.local # mesmo host do shell; o Ingress manda /pricing para cá

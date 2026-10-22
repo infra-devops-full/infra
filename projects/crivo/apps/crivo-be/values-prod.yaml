@@ -2,5 +2,5 @@
 image:
   tag: sha-6d77d1c
 env:
-  PUBLIC_APP_URL: http://prod.crivo.local
-  CORS_ORIGINS: http://prod.crivo.local
+  PUBLIC_APP_URL: http://crivo.local
+  CORS_ORIGINS: http://crivo.local

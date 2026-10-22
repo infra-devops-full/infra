@@ -46,14 +46,25 @@ Cada arquivo `apps/<app>/values-<env>.yaml` no Git **é** um deploy:
 | ------------------- | ------------------------------------------------------------ |
 | Application no ArgoCD | `crivo-be-develop` (vira `<projeto>-<app>-<env>` se o app não começar com o nome do projeto) |
 | Namespace | `crivo-develop` |
-| Host | `develop.crivo-be.crivo.local` (ou `ingress.host` dos values) |
+| Host | `develop.crivo-be.crivo.local`; em prod, `crivo-be.crivo.local` (ou `ingress.host` dos values) |
 | Release / Service | `crivo-be` |
 
-**Convenção de domínio:** o front de cada projeto fica no domínio do projeto,
-`<env>.<projeto>.local` (`ingress.host` no `values-<env>.yaml`), e as APIs no
-host derivado. Exemplo: `develop.crivo.local` (front) e
-`develop.crivo-be.crivo.local` (API). Com microfrontends, todos dividem o
-domínio do projeto, um path por mfe (veja 4.5).
+**Convenção de domínio.** O front de cada projeto fica no domínio do projeto
+(`ingress.host` no `values-<env>.yaml`), e as APIs no host derivado.
+**Produção não leva prefixo de ambiente**; os demais ambientes levam:
+
+| | develop | prod |
+| - | ------- | ---- |
+| front | `develop.crivo.local` | `crivo.local` |
+| API (derivada) | `develop.crivo-be.crivo.local` | `crivo-be.crivo.local` |
+| microfrontend | `develop.wlstore.local/catalog` | `wlstore.local/catalog` |
+
+A regra derivada (`<env>.<app>.<projeto>.local`, ou `<app>.<projeto>.local`
+em `prod`) fica no helper `app.ingressHost` do chart e no `lib-project.sh`, que
+grava o `/etc/hosts`. Quando houver domínio real, só o sufixo muda
+(`crivo.local` vira `crivo.com.br`, `develop.crivo.local` vira
+`develop.crivo.com.br`). Com microfrontends, todos dividem o domínio do projeto,
+um path por mfe (veja 4.5).
 
 Novo app, novo ambiente ou novo projeto = novos arquivos em `projects/`, um
 commit e um push. O ArgoCD encontra sozinho. Nada em `argocd/`, `charts/` ou

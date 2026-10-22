@@ -19,8 +19,8 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 - **Apps** são as pastas em `apps/`.
 - **Ambientes** são os `values-<env>.yaml`.
 - **Namespace** é `<projeto>-<env>`.
-- **Host** é `<env>.<app>.<projeto>.local`, a menos que você defina
-  `ingress.host`.
+- **Host** é `<env>.<app>.<projeto>.local` (em `prod`, sem prefixo:
+  `<app>.<projeto>.local`), a menos que você defina `ingress.host`.
 - O ArgoCD injeta `app.name`, `app.environment` e `app.project`, então os
   values não repetem esses dados.
 

@@ -77,14 +77,16 @@ project_app_values() {
 }
 
 # Host do ingress de um app num ambiente: ingress.host dos values, ou
-# <env>.<app>.<projeto>.local — mesma regra do helper "app.ingressHost" do
-# chart. Vazio se ingress.enabled=false.
+# <env>.<app>.<projeto>.local (em prod, sem prefixo: <app>.<projeto>.local) —
+# mesma regra do helper "app.ingressHost" do chart. Vazio se ingress.enabled=false.
 project_app_host() {
   local vals; vals="$(project_app_values "$1" "$2" "$3")"
   # Não usar `.ingress.enabled // true`: o `//` do yq trata false como ausente.
   [[ "$(yq -r '.ingress.enabled == false' <<<"$vals")" == "true" ]] && return 0
   local host; host="$(yq -r '.ingress.host // ""' <<<"$vals")"
-  echo "${host:-$3.$2.$1.local}"
+  if [[ -n "$host" ]]; then echo "$host"
+  elif [[ "$3" == "prod" ]]; then echo "$2.$1.local"   # produção sem prefixo
+  else echo "$3.$2.$1.local"; fi
 }
 
 # Hosts de um ambiente (um por linha).

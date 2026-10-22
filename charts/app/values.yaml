@@ -41,7 +41,8 @@ ingress:
   enabled: true
   className: nginx
   annotations: {}
-  # Vazio => <env>.<app>.<projeto>.local (ex.: develop.products.nest-rabbitmq.local)
+  # Vazio => <env>.<app>.<projeto>.local (ex.: develop.products.nest-rabbitmq.local);
+  #          em prod, sem prefixo: <app>.<projeto>.local (ex.: products.nest-rabbitmq.local)
   host: ""
   path: /
   pathType: Prefix

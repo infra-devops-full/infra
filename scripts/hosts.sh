@@ -10,7 +10,8 @@
 #   ...
 #   # <<< devops-platform <<<
 #
-# Hosts dos apps: ingress.host dos values ou <env>.<app>.<projeto>.local.
+# Hosts dos apps: ingress.host dos values, ou <env>.<app>.<projeto>.local
+# (em prod, sem prefixo: <app>.<projeto>.local).
 #
 # Uso:
 #   ./scripts/hosts.sh show     # mostra o bloco que seria gravado

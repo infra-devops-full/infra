@@ -55,13 +55,18 @@ Aplica tpl em cada value para suportar {{ .Values.app.environment }} etc.
 
 {{/*
 Host do Ingress. Usa .Values.ingress.host se definido; senão deriva
-<env>.<app>.<project>.local (mesma regra do scripts/lib-project.sh, que
-registra esses hosts no /etc/hosts).
+  prod:   <app>.<project>.local          (produção sem prefixo de ambiente)
+  outros: <env>.<app>.<project>.local
+Mesma regra do scripts/lib-project.sh, que registra esses hosts no /etc/hosts.
 */}}
 {{- define "app.ingressHost" -}}
 {{- if .Values.ingress.host -}}
 {{- .Values.ingress.host -}}
 {{- else if and .Values.app.project .Values.app.environment -}}
+{{- if eq .Values.app.environment "prod" -}}
+{{- printf "%s.%s.local" (include "app.name" .) .Values.app.project -}}
+{{- else -}}
 {{- printf "%s.%s.%s.local" .Values.app.environment (include "app.name" .) .Values.app.project -}}
+{{- end -}}
 {{- end -}}
 {{- end }}
