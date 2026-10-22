@@ -36,7 +36,8 @@ CLUSTER_NAME="${CLUSTER_NAME:-devops-lab}"
 DATA_DIR="${DATA_DIR:-$HOME/.devops-lab}"
 # Expande eventual $HOME literal vindo do .env
 DATA_DIR="$(eval echo "$DATA_DIR")"
-export CLUSTER_NAME DATA_DIR
+K3D_AGENTS="${K3D_AGENTS:-1}"
+export CLUSTER_NAME DATA_DIR K3D_AGENTS
 
 # shellcheck source=scripts/lib-project.sh
 source "$SCRIPT_DIR/scripts/lib-project.sh"
@@ -52,8 +53,19 @@ echo ""
 echo -e "${CYAN}Configuração:${NC}"
 echo "  • Cluster:   $CLUSTER_NAME"
 echo "  • DATA_DIR:  $DATA_DIR"
+echo "  • Agents:    $K3D_AGENTS (+1 server)"
 echo "  • Projetos:  $(project_names | paste -sd ', ' -)"
 echo ""
+
+# Confere tokens, variáveis e GitHub antes de gastar 15 min de setup.
+if [[ "${SKIP_DOCTOR:-0}" != "1" ]]; then
+  if ! bash "$SCRIPT_DIR/scripts/doctor.sh"; then
+    echo -e "${RED}Corrija os erros acima (ou rode com SKIP_DOCTOR=1 para ignorar).${NC}"
+    exit 1
+  fi
+  echo ""
+fi
+
 read -p "Iniciar setup? (y/N): " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -83,7 +95,7 @@ else
 
     log_substep "Renderizando k3d-config (envsubst)..."
     RENDERED_K3D="$(mktemp -t k3d-config.XXXXXX.yaml)"
-    envsubst '${CLUSTER_NAME} ${DATA_DIR}' \
+    envsubst '${CLUSTER_NAME} ${DATA_DIR} ${K3D_AGENTS}' \
       < "$INFRA_ROOT/config/k3d-config.tmpl.yaml" > "$RENDERED_K3D"
 
     log_substep "Criando cluster k3d..."
@@ -140,6 +152,8 @@ helm upgrade --install argocd argo/argo-cd \
   --set controller.metrics.enabled=true \
   --set server.metrics.enabled=true \
   --set repoServer.metrics.enabled=true \
+  --set dex.enabled=false \
+  --set notifications.enabled=false \
   --timeout 10m --wait
 
 kubectl wait --for=condition=ready pod \
@@ -182,12 +196,31 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 
 cat <<EOF > /tmp/prometheus-values.yaml
+# Enxuto para lab: o k3s não expõe etcd/scheduler/controller-manager/proxy
+# separados — coletar esses alvos só gera scrape falhando e alerta falso.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
 prometheus:
   prometheusSpec:
-    retention: 7d
+    retention: 3d
+    scrapeInterval: 60s
+    evaluationInterval: 60s
     resources:
-      requests: { cpu: 200m, memory: 512Mi }
-      limits:   { cpu: 1000m, memory: 2Gi }
+      requests: { cpu: 100m, memory: 384Mi }
+      limits:   { cpu: 500m, memory: 1536Mi }
     serviceMonitorSelectorNilUsesHelmValues: false
   ingress:
     enabled: true

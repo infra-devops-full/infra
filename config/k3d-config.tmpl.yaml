@@ -1,11 +1,13 @@
 # k3d configuration (template) — renderizado por setup.sh via envsubst.
-# Variáveis: ${CLUSTER_NAME} ${DATA_DIR}
+# Variáveis: ${CLUSTER_NAME} ${DATA_DIR} ${K3D_AGENTS}
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
   name: ${CLUSTER_NAME}
 servers: 1
-agents: 6 # 1 server + 6 agents = 7 nodes (ideal para toda infraestrutura)
+# Cada node é um k3s inteiro (kubelet + containerd): mais nodes = mais CPU
+# ociosa. Para o lab, 1 server + 1 agent basta. Ajuste com K3D_AGENTS no .env.
+agents: ${K3D_AGENTS}
 image: rancher/k3s:v1.28.5-k3s1
 
 # Porta para acessar serviços externos

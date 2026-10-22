@@ -195,10 +195,14 @@ Variáveis de cada projeto atual:
 não da sua máquina.
 
 ```bash
+make doctor          # confere tokens, variáveis, GitHub e Docker (não altera nada)
+make github          # branch develop + deploy key + proteção da main nos apps
 make setup
 ```
 
-O setup pede confirmação e a senha do `sudo` (por causa do `/etc/hosts`). Leva
+O `make setup` roda o `doctor` antes e **para** se houver erro (token
+inválido, secret faltando, ferramenta ausente). Para ignorar:
+`SKIP_DOCTOR=1 make setup`. Depois disso, ele pede confirmação e a senha do `sudo` (por causa do `/etc/hosts`). Leva
 de 10 a 15 minutos na primeira vez. Ele:
 
 1. cria o cluster k3d, com volumes em `DATA_DIR`;
@@ -278,13 +282,14 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
    `.github/workflows/`.
 2. No `deploy.yml`, ajuste `INFRA_PROJECT`, `matrix.include` (uma entrada por
    app: `app`, `context`, `dockerfile`, `build-args`) e `APPS`.
-3. Crie o secret `INFRA_REPO_TOKEN` no repo do app (veja a
-   [seção 2.2](#22-secrets-do-github-em-cada-repo-de-app) e a
-   [seção 2.3](#23-como-criar-cada-token)):
+3. Coloque o `appRepo` no `projects/<p>/project.yaml` e rode, **neste** repo:
    ```bash
-   gh secret set INFRA_REPO_TOKEN --repo <owner>/<repo-do-app>
+   make github PROJECT=<p>     # develop + INFRA_DEPLOY_KEY + proteção da main
+   make doctor                 # confere
    ```
-4. Faça commit e push na `main` do app.
+4. Faça commit do Dockerfile e do workflow na branch `develop` do app e dê
+   push. Isso já faz o primeiro deploy em **develop**. Depois, abra um PR
+   `develop → main` e faça o merge para subir em **prod**.
 
 > **Next.js:** `NEXT_PUBLIC_*` é embutido no **build**. Para uma imagem servir
 > todos os ambientes, passe em `build-args` uma URL igual em qualquer
@@ -294,7 +299,8 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
 ### 4.3 Testar o deploy
 
 1. **GitHub Actions** (repo do app): o `build` publica as imagens, e o
-   `deploy` faz commit da tag em `values-develop.yaml` aqui.
+   `deploy` faz commit da tag em `values-develop.yaml` (push na develop) ou em
+   `values-prod.yaml` (push na main) aqui.
 2. **Imagem privada?** `make ghcr NAMESPACES="<p>-develop <p>-prod"
    TOKEN=<pat-read-packages>`, ou deixe o pacote público no GitHub
    (Packages → Package settings).
@@ -309,13 +315,33 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
 > Antes do primeiro build, os apps ficam em `ImagePullBackOff`, porque a tag
 > `latest` ainda não existe. Isso é esperado.
 
-### 4.4 Promover para prod
+### 4.4 Fluxo de branches: develop → prod
 
-```bash
-TAG=$(yq '.image.tag' projects/crivo/apps/crivo-be/values-develop.yaml)
-yq -i ".image.tag = \"$TAG\"" projects/crivo/apps/crivo-be/values-prod.yaml
-git commit -am "deploy(crivo/prod): crivo-be → $TAG" && git push
 ```
+ sua máquina           GitHub (repo do app)                  cluster
+ ───────────           ────────────────────                  ───────
+ feature/x  ──push──►  PR feature/x → develop
+                         └─ CI: só build (validação)
+                       merge na develop
+                         └─ CI: build + push da imagem
+                            + commit image.tag em values-develop.yaml ──► <p>-develop
+                       (equipe testa em develop.<app>.<p>.local)
+                       PR develop → main  (main é protegida: só PR)
+                         └─ CI: só build (validação)
+                       merge na main
+                         └─ CI: build + push da imagem
+                            + commit image.tag em values-prod.yaml ───► <p>-prod
+```
+
+- **develop** = ambiente de desenvolvimento/teste. Push direto ou merge de
+  feature dispara o deploy em `<projeto>-develop`.
+- **main** = produção. Só entra por PR, porque o `make github` protege a
+  branch, e o merge dispara o deploy em `<projeto>-prod`.
+- **Rollback**: reverta o commit `deploy(<p>/<env>): …` **no repo de infra**,
+  ou volte o `image.tag` do `values-<env>.yaml` para a tag anterior. O ArgoCD
+  aplica.
+- **Neste repo de infra** não há branch por ambiente: os dois ambientes são
+  arquivos (`values-develop.yaml` / `values-prod.yaml`) na `main`.
 
 ## 5. Comandos
 
@@ -323,6 +349,8 @@ git commit -am "deploy(crivo/prod): crivo-be → $TAG" && git push
 
 ```bash
 make help                 # todos os comandos
+make doctor               # confere tokens, variáveis, GitHub e Docker
+make github [PROJECT=<p>] [ARGS=--dry-run|--rotate]  # configura o GitHub dos apps
 make setup | status | destroy
 make start | stop | restart
 make projects             # projetos, apps e ambientes descobertos
@@ -413,6 +441,8 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── apply-secrets.sh          # Secret app-secrets
 │   ├── setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh
 │   ├── hosts.sh                  # bloco isolado no /etc/hosts
+│   ├── doctor.sh                 # confere tokens, variáveis, GitHub e Docker
+│   ├── github-bootstrap.sh       # develop + deploy key + proteção da main nos apps
 │   └── 99-show-urls.sh
 ├── create-ghcr-secrets.sh
 ├── templates/                    # nestjs/, nextjs/, github/deploy.yml
@@ -432,8 +462,10 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 | `CreateContainerConfigError` | falta um Secret do `envFrom` | `make project-apply PROJECT=<p>` |
 | API reinicia em loop | segredo obrigatório ausente | conferir `secrets/<env>.env` e rodar `make secrets …` |
 | `*.local` não resolve | cache mDNS do macOS | `make hosts`, ou `curl --resolve host:80:127.0.0.1` |
-| Job `deploy` do CI: `Input required and not supplied: token` / `INFRA_REPO_TOKEN ausente` | secret `INFRA_REPO_TOKEN` não criado no repo do app | `gh secret set INFRA_REPO_TOKEN --repo <owner>/<app>` |
-| Job `deploy` do CI falha no push | o PAT não tem escrita no repo de infra | PAT fine-grained com *Contents: Read and write* no repo de infra (dono: a org `infra-devops-full`) |
+| Job `deploy` do CI: `INFRA_DEPLOY_KEY ausente` | o repo do app ainda não foi configurado | `make github PROJECT=<p>` |
+| Job `deploy` do CI: `could not read Username` / `Permission denied (publickey)` | credencial do repo de infra inválida (PAT antigo, deploy key apagada ou só leitura) | `make github PROJECT=<p> ARGS=--rotate` |
+| Docker usando muita CPU | muitos nodes k3d, ou Kubernetes do Docker Desktop ligado em paralelo | veja a [seção 9](#9-cpu-e-memória) |
+| Job `deploy` do CI falha no `git push` | deploy key sem escrita, ou proteção na `main` do repo de infra bloqueando | `make github ARGS=--rotate`; não proteja a `main` do repo de infra |
 
 ## 8. Destruir
 
@@ -443,3 +475,37 @@ make destroy
 
 Remove o cluster, o bloco do `/etc/hosts` e o contexto do kubeconfig. Antes de
 apagar o `DATA_DIR`, ele pergunta.
+
+## 9. CPU e memória
+
+O lab é dimensionado para rodar num Mac sem travar:
+
+| Item | Configuração | Por quê |
+| ---- | ------------ | ------- |
+| Nodes k3d | 1 server + `K3D_AGENTS` (default **1**) | cada node é um k3s inteiro (kubelet + containerd). Com 7 nodes, só o overhead passava de 800% de CPU |
+| Prometheus | scrape a cada 60s, retenção 3d, limite de 500m CPU | o default (30s, 7d) é para produção |
+| Alvos que o k3s não expõe | etcd, scheduler, controller-manager e kube-proxy **desligados** | coletá-los só gerava scrape falhando e alerta falso |
+| ArgoCD | Dex (SSO) e notifications **desligados** | não são usados no lab |
+
+O que você ajusta na sua máquina:
+
+1. **Desligue o Kubernetes do Docker Desktop**, se não usa (*Settings →
+   Kubernetes → Enable Kubernetes*). Ele roda um cluster inteiro em paralelo
+   ao k3d. O `make doctor` avisa quando ele está ligado.
+2. **Limite o Docker Desktop** em *Settings → Resources*: por exemplo 6 CPUs
+   e 8 a 10 GB de RAM, num Mac com 10 CPUs e 16 GB. Isso deixa folga para o
+   macOS.
+3. **Pare o cluster quando não estiver usando**: `make stop` e depois
+   `make start`. Os dados de `DATA_DIR` são mantidos.
+4. Mudou o `K3D_AGENTS`? O número de nodes só muda recriando o cluster:
+   `make destroy && make setup`.
+
+Para ver o consumo:
+
+```bash
+docker stats --no-stream            # CPU/memória de cada node k3d
+make pods                           # o que está rodando nos projetos
+```
+
+No Grafana: *Kubernetes / Compute Resources / Cluster* e *Platform / Apps*.
+
