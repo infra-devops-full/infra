@@ -75,21 +75,23 @@ O Docker precisa estar rodando, com pelo menos 8 GB de RAM.
 ## 2. Tokens e variáveis (tudo que precisa configurar)
 
 Resumo do que configurar e onde. Nada disso vai para o Git: `.env` e
-`secrets/<env>.env` são gitignored, e os tokens ficam nos secrets do GitHub.
+`secrets/<env>.env` são gitignored, e as credenciais de CI ficam nos secrets do
+GitHub.
 
-| # | O quê | Onde | Obrigatório? |
-| - | ----- | ---- | ------------ |
-| 1 | `.env` da plataforma | este repo (infra), na sua máquina | sim |
-| 2 | `INFRA_REPO_TOKEN` | **GitHub Secrets de cada repo de app** | sim, para o CI atualizar a tag |
-| 3 | `GITHUB_TOKEN` (PAT classic `read:packages`) | `.env` da infra | só se alguma imagem for **privada** |
-| 4 | variáveis não sensíveis do app | `projects/<p>/apps/<app>/values*.yaml` → `env:` | conforme o app |
-| 5 | segredos do app | `projects/<p>/secrets/<env>.env` | conforme o app |
+| # | O quê | Onde | Como |
+| - | ----- | ---- | ---- |
+| 1 | `.env` da plataforma | este repo (infra), na sua máquina | `cp .env.template .env` (2.1) |
+| 2 | branch `develop`, `INFRA_DEPLOY_KEY`, proteção da `main` | **repo de cada app** + deploy key no repo de infra | **um comando**: `make github` (2.2) |
+| 3 | `.github/workflows/deploy.yml` | repo de cada app | copiar de `templates/github/deploy.yml` (4.2) |
+| 4 | variáveis não sensíveis do app | `projects/<p>/apps/<app>/values*.yaml` → `env:` | editar e commitar (2.4) |
+| 5 | segredos do app | `projects/<p>/secrets/<env>.env` | arquivo local + `make secrets` (2.4) |
+| 6 | `GITHUB_TOKEN` (PAT classic `read:packages`) | `.env` da infra | **só se alguma imagem for privada** (2.3) |
 
-> **O repo do app não precisa de `.env` nem de outros secrets para o deploy.**
-> O único secret que você cria nele é o `INFRA_REPO_TOKEN`. O push da imagem
-> usa o `GITHUB_TOKEN` automático do Actions (o workflow já pede
-> `packages: write`). As variáveis de runtime do app ficam **neste** repo
-> (itens 4 e 5).
+> **O repo do app não tem `.env`, token nem variável de deploy para criar à
+> mão.** O único secret dele, o `INFRA_DEPLOY_KEY`, é criado pelo
+> `make github`. O push da imagem usa o `GITHUB_TOKEN` automático do Actions
+> (o workflow já pede `packages: write`). As variáveis de runtime do app
+> ficam **neste** repo (itens 4 e 5).
 
 ### 2.1 `.env` da plataforma (repo de infra)
 
@@ -104,65 +106,61 @@ cp .env.template .env
 | `INFRA_REPO_URL` | não | `git remote origin` | repo que o ArgoCD observa |
 | `INFRA_BRANCH` | não | `main` | branch que o ArgoCD observa |
 | `GITHUB_USERNAME` | só com `GITHUB_TOKEN` | — | seu usuário do GitHub (`geraldobl58`) |
-| `GITHUB_TOKEN` | só p/ imagem privada | — | **PAT classic** com `read:packages` (item 2.3). Vira o `ghcr-secret` dos namespaces |
+| `GITHUB_TOKEN` | só p/ imagem privada | **deixe vazio** | **PAT classic** com `read:packages` (2.3). Vira o `ghcr-secret` dos namespaces |
 
-> Se suas imagens são públicas (o padrão para pacotes de repos públicos),
-> deixe `GITHUB_TOKEN` vazio ou com o placeholder. Um token **inválido** é
-> pior que nenhum: o pod envia a credencial e o GHCR responde 403 até para
-> imagem pública. Por isso o `create-ghcr-secrets.sh` valida o token e não
-> cria o secret se o GHCR recusar.
+> Os pacotes publicados por repos públicos são públicos: **deixe
+> `GITHUB_TOKEN` vazio**. Um token **inválido** é pior que nenhum, porque o
+> pod envia a credencial e o GHCR responde 403 até para imagem pública. Por
+> isso o `create-ghcr-secrets.sh` valida o token e não cria o secret se o GHCR
+> recusar. Esse `GITHUB_TOKEN` não tem relação com o `gh`, que usa o seu
+> `gh auth login`.
 
-### 2.2 Secrets do GitHub em cada repo de app
+### 2.2 GitHub dos apps: um comando só
 
-| Secret | Valor | Comando |
-| ------ | ----- | ------- |
-| `INFRA_REPO_TOKEN` | PAT **fine-grained** com *Contents: Read and write* no repo de infra (item 2.3) | `gh secret set INFRA_REPO_TOKEN --repo <owner>/<repo-do-app>` |
-
-Repos atuais:
+Pré-requisito: `gh auth login` com um usuário **admin** do repo de infra e dos
+repos dos apps.
 
 ```bash
-gh secret set INFRA_REPO_TOKEN --repo geraldobl58/crivo
-gh secret set INFRA_REPO_TOKEN --repo geraldobl58/microservice-with-nestjs-rabbitmq
-gh secret list --repo geraldobl58/crivo      # conferir
+make github ARGS=--dry-run        # mostra o que vai fazer, sem alterar nada
+make github                       # todos os projetos de projects/
+make github PROJECT=crivo         # só um projeto
+make github ARGS=--rotate         # gera deploy keys novas (rotação)
 ```
 
-O `gh secret set` pede o valor no terminal, então ele não fica no histórico do
-shell. Sem esse secret, o job `build` publica a imagem, mas o `deploy` falha
-com `INFRA_REPO_TOKEN ausente`, e nada muda no cluster.
+O que o [`scripts/github-bootstrap.sh`](scripts/github-bootstrap.sh) faz em
+cada projeto (repo = `appRepo` do `project.yaml`). Ele é idempotente: pode
+rodar de novo.
 
-Não são secrets, mas ficam no `deploy.yml` de cada app (bloco `env` e
-`matrix.include`):
+| Passo | Resultado |
+| ----- | --------- |
+| branch `develop` | criada a partir da `main`, se não existir |
+| deploy key | chave SSH ed25519 nova: a **pública** vai para o repo de infra como deploy key **com escrita** (`ci-deploy:<owner>/<repo>`), a **privada** vira o secret `INFRA_DEPLOY_KEY` do repo do app. A chave não passa pelo terminal e é apagada do disco |
+| `INFRA_REPO_TOKEN` | removido, se existir (modelo antigo com PAT) |
+| proteção da `main` | só entra por PR, sem force push e sem deletar (admin pode furar em emergência). Use `ARGS=--no-protect` para pular |
+
+Por que deploy key e não PAT? Ela não expira, só dá acesso ao repo de infra,
+não depende de aprovação de PAT pela org e é criada inteira pelo script. Um
+PAT do seu usuário não consegue escrever no repo da org `infra-devops-full`;
+esse foi o erro `could not read Username` no checkout.
+
+Campos do `deploy.yml` de cada app (não são secrets):
 
 | Campo | Exemplo (crivo) |
 | ----- | --------------- |
 | `INFRA_REPO` | `infra-devops-full/infra` |
 | `INFRA_PROJECT` | `crivo` |
-| `DEPLOY_ENV` | `develop` |
+| `matrix.include[]` | `app`, `context`, `dockerfile`, `build-args` por app |
 | `matrix.include[].build-args` | `NEXT_PUBLIC_API_URL=http://crivo-be:8080` |
 | `APPS` | `crivo-be crivo-fe` |
+| `DEPLOY_ENV` | calculado: `develop` na branch develop, `prod` na main |
 
-### 2.3 Como criar cada token
-
-**`INFRA_REPO_TOKEN`** (PAT fine-grained, escrita no repo de infra):
-
-1. https://github.com/settings/personal-access-tokens/new
-2. **Resource owner**: `infra-devops-full` (a org dona do repo de infra). Se a
-   org não aparecer, um admin dela precisa permitir PATs fine-grained em
-   *Org Settings → Personal access tokens*.
-3. **Repository access**: *Only select repositories* → `infra`.
-4. **Permissions → Repository → Contents**: *Read and write*.
-5. Gere o token e salve-o com `gh secret set` nos repos de app (item 2.2).
-   O mesmo token serve para todos eles.
-
-**`GITHUB_TOKEN` do `.env`** (PAT **classic**, só para imagens privadas):
+### 2.3 Token do GHCR (só para imagens privadas)
 
 1. https://github.com/settings/tokens/new?scopes=read:packages
-2. Marque só `read:packages` e gere.
-3. Cole em `GITHUB_TOKEN=` no `.env` e rode `make ghcr NAMESPACES="<p>-develop <p>-prod"`
-   (ou `make project-apply PROJECT=<p>`).
-
-> O GHCR **não aceita PAT fine-grained** (`github_pat_…`) para pull. Precisa
-> ser classic (`ghp_…`).
+2. Marque só `read:packages` e gere. Precisa ser **classic** (`ghp_…`): o
+   GHCR recusa PAT fine-grained (`github_pat_…`).
+3. Coloque em `GITHUB_TOKEN=` no `.env` e rode
+   `make ghcr NAMESPACES="<p>-develop <p>-prod"` (ou `make project-apply PROJECT=<p>`).
 
 ### 2.4 Variáveis de ambiente dos apps (runtime)
 

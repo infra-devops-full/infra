@@ -1,6 +1,6 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus argocd \
         secrets ghcr helm-lint helm-template apply-argocd render-platform postgres \
-        projects project-apply hosts pods apps describe events rollout shell pf refresh
+        projects project-apply github hosts pods apps describe events rollout shell pf refresh
 
 # Cores
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -125,6 +125,9 @@ project-apply: ## Prepara UM projeto no cluster (deps, secrets) + /etc/hosts. Us
 	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make project-apply PROJECT=<nome>$(RESET)"; exit 1; fi
 	@./scripts/apply-project.sh $(PROJECT)
 	@./scripts/hosts.sh apply
+
+github: ## Configura o GitHub dos apps (develop, deploy key, proteção da main). Uso: make github [PROJECT=<p>] [ARGS=--dry-run]
+	@./scripts/github-bootstrap.sh $(ARGS) $(PROJECT)
 
 hosts: ## Regrava o bloco da plataforma no /etc/hosts (sudo). Ver antes: ./scripts/hosts.sh show
 	@./scripts/hosts.sh apply

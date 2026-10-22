@@ -3,23 +3,31 @@
 # Copie para <repo-do-app>/.github/workflows/deploy.yml e ajuste:
 #   - env.INFRA_PROJECT     pasta do projeto em projects/ no repo de infra
 #   - matrix.include        uma entrada por app (= pasta projects/<p>/apps/<app>)
+#   - env.APPS              os mesmos nomes de matrix.include[].app
 #
-# Fluxo:
-#   push na main do app
-#     → build + push: ghcr.io/<owner>/<repo>/<app>:sha-<7>  (+ latest)
-#     → commit no REPO DE INFRA: image.tag em
-#       projects/<INFRA_PROJECT>/apps/<app>/values-<DEPLOY_ENV>.yaml
-#     → ArgoCD detecta o commit e faz o rollout em <projeto>-<env>
+# Fluxo de branches → ambientes:
+#   feature/*  ──PR──►  develop  ──PR──►  main
+#      │                   │                │
+#   PR: só build        push: build      push: build
+#   (validação)         + deploy em      + deploy em
+#                         develop           prod
 #
-# Secret necessário no repo do app (Settings → Secrets → Actions):
-#   INFRA_REPO_TOKEN  PAT fine-grained com "Contents: Read and write" no repo
-#                     de infra.
+# Deploy = commit no REPO DE INFRA trocando image.tag em
+#   projects/<INFRA_PROJECT>/apps/<app>/values-<env>.yaml
+# e o ArgoCD faz o rollout no namespace <projeto>-<env>.
+#
+# Secret necessário no repo do app (criado por scripts/github-bootstrap.sh
+# do repo de infra):
+#   INFRA_DEPLOY_KEY  chave SSH privada; a pública está no repo de infra como
+#                     deploy key com escrita.
 # =============================================================================
 name: build-and-deploy
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
   workflow_dispatch:
 
 env:
@@ -27,7 +35,14 @@ env:
   INFRA_REPO: infra-devops-full/infra   # owner/repo da plataforma DevOps
   INFRA_BRANCH: main                     # branch que o ArgoCD acompanha
   INFRA_PROJECT: my-project              # pasta em projects/ no repo de infra
-  DEPLOY_ENV: develop                    # ambiente atualizado automaticamente
+  # develop → ambiente develop; main → ambiente prod.
+  DEPLOY_ENV: ${{ github.ref_name == 'main' && 'prod' || 'develop' }}
+  # PR só valida (sem push); push publica a imagem.
+  PUBLISH: ${{ github.event_name != 'pull_request' }}
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -49,20 +64,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Nome e tag da imagem
+      - name: Nome e tags da imagem
         id: img
         run: |
           echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}/${{ matrix.app }}" >> "$GITHUB_OUTPUT"
           echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          # Tag móvel por branch: main → latest, develop → develop.
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "channel=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=develop" >> "$GITHUB_OUTPUT"
+          fi
 
       # Imagem multi-arch: amd64 (servidores/CI) + arm64 (k3d no Mac Apple Silicon).
+      # Em PR só amd64 — é validação, e o QEMU deixa o build bem mais lento.
       - uses: docker/setup-qemu-action@v4
+        if: env.PUBLISH == 'true'
         with:
           platforms: arm64
 
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
+        if: env.PUBLISH == 'true'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -71,30 +95,31 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.PUBLISH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix.build-args }}
-          push: true
+          push: ${{ env.PUBLISH == 'true' }}
           tags: |
             ${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }}
-            ${{ steps.img.outputs.name }}:latest
+            ${{ steps.img.outputs.name }}:${{ steps.img.outputs.channel }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Evita dois pushes simultâneos no repo de infra.
     concurrency: infra-${{ github.repository }}
     env:
       APPS: my-app                       # mesmos nomes de matrix.include[].app
     steps:
-      - name: Confere o INFRA_REPO_TOKEN
+      - name: Confere o INFRA_DEPLOY_KEY
         env:
-          INFRA_REPO_TOKEN: ${{ secrets.INFRA_REPO_TOKEN }}
+          INFRA_DEPLOY_KEY: ${{ secrets.INFRA_DEPLOY_KEY }}
         run: |
-          if [ -z "$INFRA_REPO_TOKEN" ]; then
-            echo "::error title=INFRA_REPO_TOKEN ausente::Crie um PAT fine-grained com 'Contents: Read and write' no repo ${INFRA_REPO} e salve em Settings → Secrets and variables → Actions como INFRA_REPO_TOKEN (gh secret set INFRA_REPO_TOKEN --repo ${GITHUB_REPOSITORY}). A imagem já foi publicada; só a atualização da tag no repo de infra ficou pendente."
+          if [ -z "$INFRA_DEPLOY_KEY" ]; then
+            echo "::error title=INFRA_DEPLOY_KEY ausente::Rode no repo de infra: ./scripts/github-bootstrap.sh ${INFRA_PROJECT}  — ele cria a deploy key em ${INFRA_REPO} e o secret INFRA_DEPLOY_KEY neste repo. A imagem já foi publicada; só a atualização da tag ficou pendente."
             exit 1
           fi
 
@@ -102,7 +127,7 @@ jobs:
         with:
           repository: ${{ env.INFRA_REPO }}
           ref: ${{ env.INFRA_BRANCH }}
-          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
 
       - name: Atualiza image.tag no repo de infra
         run: |

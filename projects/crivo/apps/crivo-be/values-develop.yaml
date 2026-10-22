@@ -1,4 +1,4 @@
-# Atualizado automaticamente pelo CI do crivo a cada push na main.
+# image.tag: atualizado pelo CI do app a cada push na branch develop.
 image:
   tag: latest
 
