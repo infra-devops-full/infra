@@ -1,6 +1,6 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus argocd \
         secrets ghcr helm-lint helm-template apply-argocd render-platform postgres \
-        projects project-apply hosts
+        projects project-apply hosts pods apps describe events rollout shell pf refresh
 
 # Cores
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -50,6 +50,51 @@ logs: ## Logs de um app. Uso: make logs SERVICE=products NAMESPACE=nest-rabbitmq
 		echo "$(YELLOW)⚠️  Uso: make logs SERVICE=<app> NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; \
 	fi
 	@kubectl logs -n $(NAMESPACE) -l app.kubernetes.io/name=$(SERVICE) --tail=100 -f
+
+pods: ## Pods dos projetos (ou de um namespace). Uso: make pods [NAMESPACE=<projeto>-<env>]
+	@if [ -n "$(NAMESPACE)" ]; then kubectl get pods -n $(NAMESPACE) -o wide; \
+	else bash -c 'source scripts/lib-project.sh; for p in $$(project_names); do for ns in $$(project_namespaces $$p); do \
+		echo "── $$ns"; kubectl get pods -n $$ns 2>/dev/null; done; done'; fi
+
+apps: ## Applications do ArgoCD (sync/health)
+	@kubectl get applications -n argocd -o custom-columns='APP:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision'
+
+describe: ## Detalha o pod de um app (eventos no fim). Uso: make describe SERVICE=<app> NAMESPACE=<projeto>-<env>
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then \
+		echo "$(YELLOW)⚠️  Uso: make describe SERVICE=<app> NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; \
+	fi
+	@kubectl describe pod -n $(NAMESPACE) -l app.kubernetes.io/name=$(SERVICE)
+
+events: ## Eventos recentes de um namespace (erros de pull, probes...). Uso: make events NAMESPACE=<projeto>-<env>
+	@if [ -z "$(NAMESPACE)" ]; then echo "$(YELLOW)⚠️  Uso: make events NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; fi
+	@kubectl get events -n $(NAMESPACE) --sort-by=.lastTimestamp | tail -25
+
+rollout: ## Reinicia um app (puxa a imagem de novo). Uso: make rollout SERVICE=<app> NAMESPACE=<projeto>-<env>
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then \
+		echo "$(YELLOW)⚠️  Uso: make rollout SERVICE=<app> NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; \
+	fi
+	@kubectl rollout restart deploy/$(SERVICE) -n $(NAMESPACE)
+	@kubectl rollout status deploy/$(SERVICE) -n $(NAMESPACE) --timeout=180s
+
+shell: ## Abre um shell no container de um app. Uso: make shell SERVICE=<app> NAMESPACE=<projeto>-<env>
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then \
+		echo "$(YELLOW)⚠️  Uso: make shell SERVICE=<app> NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; \
+	fi
+	@kubectl exec -it -n $(NAMESPACE) deploy/$(SERVICE) -- sh
+
+pf: ## Port-forward de um Service p/ localhost. Uso: make pf SERVICE=<svc> NAMESPACE=<ns> PORT=<porta> [LOCAL=<porta>]
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ] || [ -z "$(PORT)" ]; then \
+		echo "$(YELLOW)⚠️  Uso: make pf SERVICE=postgres NAMESPACE=crivo-develop PORT=5432 [LOCAL=5433]$(RESET)"; exit 1; \
+	fi
+	@kubectl port-forward -n $(NAMESPACE) svc/$(SERVICE) $(or $(LOCAL),$(PORT)):$(PORT)
+
+refresh: ## Força o ArgoCD a reler o Git agora. Uso: make refresh [APP=crivo-be-develop] (sem APP = todos)
+	@if [ -n "$(APP)" ]; then \
+		kubectl -n argocd annotate application $(APP) argocd.argoproj.io/refresh=hard --overwrite; \
+	else \
+		kubectl -n argocd annotate applicationset platform-apps argocd.argoproj.io/application-set-refresh=true --overwrite; \
+		kubectl -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite; \
+	fi
 
 ghcr: ## Cria ghcr-secret. Uso: make ghcr NAMESPACES="<projeto>-develop <projeto>-prod" [TOKEN=ghp_xxx]
 	@if [ -z "$(NAMESPACES)" ]; then echo "$(YELLOW)⚠️  Informe NAMESPACES=\"ns1 ns2\"$(RESET)"; exit 1; fi

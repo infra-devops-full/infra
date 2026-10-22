@@ -72,23 +72,124 @@ brew install k9s                           # opcional
 
 O Docker precisa estar rodando, com pelo menos 8 GB de RAM.
 
-## 2. Configurar o `.env`
+## 2. Tokens e variáveis (tudo que precisa configurar)
+
+Resumo do que configurar e onde. Nada disso vai para o Git: `.env` e
+`secrets/<env>.env` são gitignored, e os tokens ficam nos secrets do GitHub.
+
+| # | O quê | Onde | Obrigatório? |
+| - | ----- | ---- | ------------ |
+| 1 | `.env` da plataforma | este repo (infra), na sua máquina | sim |
+| 2 | `INFRA_REPO_TOKEN` | **GitHub Secrets de cada repo de app** | sim, para o CI atualizar a tag |
+| 3 | `GITHUB_TOKEN` (PAT classic `read:packages`) | `.env` da infra | só se alguma imagem for **privada** |
+| 4 | variáveis não sensíveis do app | `projects/<p>/apps/<app>/values*.yaml` → `env:` | conforme o app |
+| 5 | segredos do app | `projects/<p>/secrets/<env>.env` | conforme o app |
+
+> **O repo do app não precisa de `.env` nem de outros secrets para o deploy.**
+> O único secret que você cria nele é o `INFRA_REPO_TOKEN`. O push da imagem
+> usa o `GITHUB_TOKEN` automático do Actions (o workflow já pede
+> `packages: write`). As variáveis de runtime do app ficam **neste** repo
+> (itens 4 e 5).
+
+### 2.1 `.env` da plataforma (repo de infra)
 
 ```bash
 cp .env.template .env
 ```
 
-| Variável | Para quê |
-| -------- | -------- |
-| `CLUSTER_NAME` | nome do cluster k3d (default `devops-lab`) |
-| `DATA_DIR` | volumes do cluster **no disco do Mac** (default `~/.devops-lab`) |
-| `GITHUB_TOKEN` | PAT com `read:packages`, para o cluster baixar imagens privadas do GHCR |
-| `GITHUB_USERNAME` | seu usuário do GitHub |
-| `INFRA_REPO_URL` | opcional; repo que o ArgoCD observa (default: `git remote origin`) |
-| `INFRA_BRANCH` | opcional; branch observada (default `main`) |
+| Variável | Obrigatória | Default | Para quê |
+| -------- | ----------- | ------- | -------- |
+| `CLUSTER_NAME` | não | `devops-lab` | nome do cluster k3d |
+| `DATA_DIR` | não | `$HOME/.devops-lab` | volumes do cluster **no disco do Mac**. Para usar o SSD externo: `/Volumes/Backup/devops-lab` |
+| `INFRA_REPO_URL` | não | `git remote origin` | repo que o ArgoCD observa |
+| `INFRA_BRANCH` | não | `main` | branch que o ArgoCD observa |
+| `GITHUB_USERNAME` | só com `GITHUB_TOKEN` | — | seu usuário do GitHub (`geraldobl58`) |
+| `GITHUB_TOKEN` | só p/ imagem privada | — | **PAT classic** com `read:packages` (item 2.3). Vira o `ghcr-secret` dos namespaces |
 
-> `DATA_DIR` não depende de SSD externo. Para usar um, aponte para ele, por
-> exemplo `DATA_DIR=/Volumes/Backup/devops-lab`.
+> Se suas imagens são públicas (o padrão para pacotes de repos públicos),
+> deixe `GITHUB_TOKEN` vazio ou com o placeholder. Um token **inválido** é
+> pior que nenhum: o pod envia a credencial e o GHCR responde 403 até para
+> imagem pública. Por isso o `create-ghcr-secrets.sh` valida o token e não
+> cria o secret se o GHCR recusar.
+
+### 2.2 Secrets do GitHub em cada repo de app
+
+| Secret | Valor | Comando |
+| ------ | ----- | ------- |
+| `INFRA_REPO_TOKEN` | PAT **fine-grained** com *Contents: Read and write* no repo de infra (item 2.3) | `gh secret set INFRA_REPO_TOKEN --repo <owner>/<repo-do-app>` |
+
+Repos atuais:
+
+```bash
+gh secret set INFRA_REPO_TOKEN --repo geraldobl58/crivo
+gh secret set INFRA_REPO_TOKEN --repo geraldobl58/microservice-with-nestjs-rabbitmq
+gh secret list --repo geraldobl58/crivo      # conferir
+```
+
+O `gh secret set` pede o valor no terminal, então ele não fica no histórico do
+shell. Sem esse secret, o job `build` publica a imagem, mas o `deploy` falha
+com `INFRA_REPO_TOKEN ausente`, e nada muda no cluster.
+
+Não são secrets, mas ficam no `deploy.yml` de cada app (bloco `env` e
+`matrix.include`):
+
+| Campo | Exemplo (crivo) |
+| ----- | --------------- |
+| `INFRA_REPO` | `infra-devops-full/infra` |
+| `INFRA_PROJECT` | `crivo` |
+| `DEPLOY_ENV` | `develop` |
+| `matrix.include[].build-args` | `NEXT_PUBLIC_API_URL=http://crivo-be:8080` |
+| `APPS` | `crivo-be crivo-fe` |
+
+### 2.3 Como criar cada token
+
+**`INFRA_REPO_TOKEN`** (PAT fine-grained, escrita no repo de infra):
+
+1. https://github.com/settings/personal-access-tokens/new
+2. **Resource owner**: `infra-devops-full` (a org dona do repo de infra). Se a
+   org não aparecer, um admin dela precisa permitir PATs fine-grained em
+   *Org Settings → Personal access tokens*.
+3. **Repository access**: *Only select repositories* → `infra`.
+4. **Permissions → Repository → Contents**: *Read and write*.
+5. Gere o token e salve-o com `gh secret set` nos repos de app (item 2.2).
+   O mesmo token serve para todos eles.
+
+**`GITHUB_TOKEN` do `.env`** (PAT **classic**, só para imagens privadas):
+
+1. https://github.com/settings/tokens/new?scopes=read:packages
+2. Marque só `read:packages` e gere.
+3. Cole em `GITHUB_TOKEN=` no `.env` e rode `make ghcr NAMESPACES="<p>-develop <p>-prod"`
+   (ou `make project-apply PROJECT=<p>`).
+
+> O GHCR **não aceita PAT fine-grained** (`github_pat_…`) para pull. Precisa
+> ser classic (`ghp_…`).
+
+### 2.4 Variáveis de ambiente dos apps (runtime)
+
+Ficam neste repo, separadas por sensibilidade:
+
+| Tipo | Onde | Versionado? | Como chega no pod |
+| ---- | ---- | ----------- | ----------------- |
+| Não sensível, igual em todo ambiente | `apps/<app>/values.yaml` → `env:` | sim | env do container |
+| Não sensível, por ambiente (URLs, flags) | `apps/<app>/values-<env>.yaml` → `env:` | sim | env do container (sobrescreve) |
+| Segredo (JWT, Stripe, API keys) | `projects/<p>/secrets/<env>.env` | **não** | Secret `app-secrets` → `envFrom` |
+| Segredo de lab (fictício) | `projects/<p>/secrets/example.env` | sim | fallback quando falta o `<env>.env` |
+| Conexões (Postgres/Redis/RabbitMQ) | geradas pela plataforma a partir do `project.yaml` | — | Secrets `postgres` / `redis` / `rabbitmq` → `envFrom` |
+
+Depois de mudar um `secrets/<env>.env`:
+
+```bash
+make secrets PROJECT=crivo ENV=develop              # recria o app-secrets
+make rollout SERVICE=crivo-be NAMESPACE=crivo-develop # pods leem env só no start
+```
+
+Variáveis de cada projeto atual:
+
+| Projeto / app | `env:` (values) | `secrets/<env>.env` | Da plataforma |
+| ------------- | --------------- | ------------------- | ------------- |
+| crivo / crivo-be | `PORT`, `NODE_ENV`, `SWAGGER_ENABLED`, `MESSAGING_PROVIDER`, `REMINDER_HOURS_BEFORE`, `PUBLIC_APP_URL`, `CORS_ORIGINS` | `JWT_SECRET`, `JWT_EXPIRES_IN_SECONDS`, `REFRESH_TOKEN_EXPIRES_IN_SECONDS`, `INBOUND_WEBHOOK_TOKEN`, `BULL_BOARD_*`, `EVOLUTION_*`, `META_*`, `DEEPSEEK_*`, `AI_TIMEOUT_MS`, `CLOUDINARY_*`, `STRIPE_*`, `SMTP_*`, `MAIL_FROM` (lista completa em [`example.env`](projects/crivo/secrets/example.env)) | `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` |
+| crivo / crivo-fe | `PORT`, `NODE_ENV` | — | — (a URL da API é embutida no build: `NEXT_PUBLIC_API_URL=http://crivo-be:8080`) |
+| nest-rabbitmq / products | `PORT`, `NODE_ENV` | — | `RABBITMQ_URL`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
 
 ## 3. Subir a plataforma
 
@@ -179,8 +280,9 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
    `.github/workflows/`.
 2. No `deploy.yml`, ajuste `INFRA_PROJECT`, `matrix.include` (uma entrada por
    app: `app`, `context`, `dockerfile`, `build-args`) e `APPS`.
-3. Crie um PAT fine-grained com *Contents: Read and write* **no repo de
-   infra** e salve-o no repo do app:
+3. Crie o secret `INFRA_REPO_TOKEN` no repo do app (veja a
+   [seção 2.2](#22-secrets-do-github-em-cada-repo-de-app) e a
+   [seção 2.3](#23-como-criar-cada-token)):
    ```bash
    gh secret set INFRA_REPO_TOKEN --repo <owner>/<repo-do-app>
    ```
@@ -219,6 +321,8 @@ git commit -am "deploy(crivo/prod): crivo-be → $TAG" && git push
 
 ## 5. Comandos
 
+### 5.1 Plataforma (`make`)
+
 ```bash
 make help                 # todos os comandos
 make setup | status | destroy
@@ -233,8 +337,67 @@ make hosts                # regrava o bloco do /etc/hosts
 make helm-lint            # valida todos os values-<env>.yaml
 make helm-template PROJECT=<p> APP=<a> ENV=<e>
 make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
-make logs SERVICE=<app> NAMESPACE=<p>-<env>
 ```
+
+### 5.2 Kubernetes do dia a dia
+
+Nos atalhos, `SERVICE` é o nome do app (a pasta em `apps/`, por exemplo
+`crivo-be`) e `NAMESPACE` é `<projeto>-<env>` (por exemplo `crivo-develop`).
+
+| Tarefa | Atalho | `kubectl` equivalente |
+| ------ | ------ | --------------------- |
+| Pods de todos os projetos | `make pods` | `kubectl get pods -A` |
+| Pods de um namespace | `make pods NAMESPACE=crivo-develop` | `kubectl get pods -n crivo-develop -o wide` |
+| Apps do ArgoCD (sync/health) | `make apps` | `kubectl get applications -n argocd` |
+| Logs (follow) | `make logs SERVICE=crivo-be NAMESPACE=crivo-develop` | `kubectl logs -n crivo-develop deploy/crivo-be -f --tail=100` |
+| Logs do container que caiu | — | `kubectl logs -n crivo-develop deploy/crivo-be --previous` |
+| Por que o pod não sobe | `make describe SERVICE=crivo-be NAMESPACE=crivo-develop` | `kubectl describe pod -n crivo-develop -l app.kubernetes.io/name=crivo-be` |
+| Eventos recentes | `make events NAMESPACE=crivo-develop` | `kubectl get events -n crivo-develop --sort-by=.lastTimestamp` |
+| Reiniciar app / reler env e secrets | `make rollout SERVICE=crivo-be NAMESPACE=crivo-develop` | `kubectl rollout restart deploy/crivo-be -n crivo-develop` |
+| Shell no container | `make shell SERVICE=crivo-be NAMESPACE=crivo-develop` | `kubectl exec -it -n crivo-develop deploy/crivo-be -- sh` |
+| Acessar Postgres local | `make pf SERVICE=postgres NAMESPACE=crivo-develop PORT=5432 LOCAL=5433` | `kubectl port-forward -n crivo-develop svc/postgres 5433:5432` |
+| UI do RabbitMQ | `make pf SERVICE=rabbitmq NAMESPACE=nest-rabbitmq-develop PORT=15672` | `kubectl port-forward -n nest-rabbitmq-develop svc/rabbitmq 15672:15672` |
+| ArgoCD reler o Git agora | `make refresh` (ou `APP=crivo-be-develop`) | `kubectl -n argocd annotate application crivo-be-develop argocd.argoproj.io/refresh=hard --overwrite` |
+| CPU/memória | — | `kubectl top pods -n crivo-develop` (o setup desliga o metrics-server; use o Grafana) |
+
+Mais comandos `kubectl` úteis:
+
+```bash
+# Contexto / cluster
+kubectl config current-context                 # deve ser k3d-devops-lab
+kubectl get nodes -o wide
+kubectl get ns -l devops-platform/project      # namespaces dos projetos
+
+# Visão geral de um namespace
+kubectl get all -n crivo-develop               # deploy, rs, pods, svc
+kubectl get ingress -A                         # hosts publicados
+kubectl get secrets -n crivo-develop           # postgres, redis, app-secrets...
+
+# Inspecionar um Secret (decodificado)
+kubectl get secret app-secrets -n crivo-develop -o json | jq -r '.data | map_values(@base64d)'
+
+# Imagem e tag que estão rodando
+kubectl get deploy -n crivo-develop -o custom-columns='APP:.metadata.name,IMAGE:.spec.template.spec.containers[0].image'
+
+# Histórico e rollback manual (o ArgoCD desfaz no próximo sync; o
+# rollback "de verdade" é voltar a tag no values-<env>.yaml)
+kubectl rollout history deploy/crivo-be -n crivo-develop
+kubectl rollout undo deploy/crivo-be -n crivo-develop
+
+# Escalar (o ArgoCD com selfHeal volta para o replicaCount do values)
+kubectl scale deploy/crivo-be -n crivo-develop --replicas=2
+
+# Testar de dentro do cluster (DNS dos Services)
+kubectl run tmp --rm -it --image=curlimages/curl -n crivo-develop -- curl -s http://crivo-be:8080/health
+
+# Logs do ArgoCD quando um app não aparece/sincroniza
+kubectl logs -n argocd deploy/argocd-applicationset-controller --tail=50
+kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
+```
+
+> No GitOps, mudanças feitas direto com `kubectl` (scale, set image, edit)
+> são revertidas pelo ArgoCD (`selfHeal: true`). Para mudar de verdade, altere
+> os arquivos em `projects/` e faça commit.
 
 ## 6. Estrutura
 
@@ -265,11 +428,14 @@ make logs SERVICE=<app> NAMESPACE=<p>-<env>
 | Sintoma | Causa provável | Solução |
 | ------- | -------------- | ------- |
 | App não aparece no ArgoCD | `projects/` não foi pushado, ou falta `values-<env>.yaml` | `git push`; *Refresh* no ApplicationSet |
-| `ImagePullBackOff` | a imagem ainda não foi publicada, ou o pacote é privado sem `ghcr-secret` | rodar o CI do app; `make ghcr …` |
+| `ImagePullBackOff` + `403 Forbidden` | `ghcr-secret` com token inválido (ex.: PAT fine-grained). O kubelet envia o secret até para imagem pública | apagar o secret (`kubectl -n <ns> delete secret ghcr-secret`) ou recriar com PAT classic (`make ghcr …`) |
+| `ImagePullBackOff` + `no match for platform in manifest` | imagem só `amd64`; os nodes do k3d no Mac Apple Silicon são `arm64` | o workflow do template já publica `linux/amd64,linux/arm64`; rode o CI de novo |
+| `ImagePullBackOff` + `not found` | a imagem/tag ainda não foi publicada | rodar o CI do app |
 | `CreateContainerConfigError` | falta um Secret do `envFrom` | `make project-apply PROJECT=<p>` |
 | API reinicia em loop | segredo obrigatório ausente | conferir `secrets/<env>.env` e rodar `make secrets …` |
 | `*.local` não resolve | cache mDNS do macOS | `make hosts`, ou `curl --resolve host:80:127.0.0.1` |
-| Job `deploy` do CI falha no push | `INFRA_REPO_TOKEN` ausente ou sem escrita | recriar o PAT com *Contents: Read and write* |
+| Job `deploy` do CI: `Input required and not supplied: token` / `INFRA_REPO_TOKEN ausente` | secret `INFRA_REPO_TOKEN` não criado no repo do app | `gh secret set INFRA_REPO_TOKEN --repo <owner>/<app>` |
+| Job `deploy` do CI falha no push | o PAT não tem escrita no repo de infra | PAT fine-grained com *Contents: Read and write* no repo de infra (dono: a org `infra-devops-full`) |
 
 ## 8. Destruir
 

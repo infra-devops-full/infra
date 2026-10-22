@@ -68,6 +68,25 @@ fi
 
 read -r -a NAMESPACES <<< "$NAMESPACES_STR"
 
+# Valida o token no GHCR ANTES de criar o secret. Credencial inválida é pior
+# que nenhuma: o kubelet envia o ghcr-secret mesmo para imagens públicas e o
+# pull falha com 403. O GHCR só aceita PAT *classic* com read:packages —
+# PAT fine-grained (github_pat_...) é recusado.
+GHCR_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -u "${USERNAME}:${TOKEN}" \
+  "https://${REGISTRY}/token?service=${REGISTRY}&scope=repository:${USERNAME}/probe:pull" || echo "000")
+if [[ "$GHCR_STATUS" != "200" ]]; then
+  echo "❌ O GHCR recusou o token (HTTP $GHCR_STATUS) — ghcr-secret NÃO foi criado."
+  [[ "$TOKEN" == github_pat_* ]] && \
+    echo "   Esse é um PAT fine-grained; o GHCR só aceita PAT classic."
+  echo "   Crie um PAT classic com o scope read:packages: https://github.com/settings/tokens/new?scopes=read:packages"
+  echo "   Imagens públicas não precisam de ghcr-secret."
+  # Remove secrets inválidos antigos, que bloqueariam até imagens públicas.
+  for NS in "${NAMESPACES[@]}"; do
+    kubectl delete secret ghcr-secret -n "$NS" --ignore-not-found >/dev/null 2>&1 || true
+  done
+  exit 1
+fi
+
 echo "🔐 Criando ghcr-secret em: ${NAMESPACES[*]}"
 echo ""
 
