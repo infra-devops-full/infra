@@ -481,6 +481,60 @@ O que mudou?
 
 ---
 
+## Exercício 16: o alerta que acorda você
+
+Até aqui você achou os problemas olhando. Em produção, quem avisa é o
+**alerta**. Derrube o demo de um jeito que nem o rolling update salva e gere
+tráfego:
+
+```bash
+kubectl -n treino patch deploy demo --type=json -p '[
+  {"op":"replace","path":"/spec/strategy","value":{"type":"Recreate"}},
+  {"op":"replace","path":"/spec/template/spec/containers/0/image","value":"ghcr.io/geraldobl58/nao-existe:quebrado"}]'
+
+for i in $(seq 1 300); do
+  curl -s -o /dev/null -w '%{http_code}\n' --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/
+  sleep 0.2
+done | sort | uniq -c        # quase tudo 503
+```
+
+Acompanhe por ~6 minutos, gerando mais um pouco de tráfego de vez em quando:
+
+```bash
+make alerts
+```
+
+**Sintoma observado:** primeiro nada; depois `AppDown` e
+`AppErrorBudgetBurn` (critical) para `app=demo`, este último como
+**suppressed**. No Prometheus (http://prometheus.devops.local/alerts) os dois
+passam por `pending` antes de `firing`.
+
+<details><summary>Dica</summary>
+
+- Por que demorou? Olhe o `for:` de cada regra em
+  `k8s/prometheus-rules-apps.yaml`.
+- Por que um deles está *suppressed*? Procure `inhibit_rules` em
+  `config/observability/kube-prometheus-stack-values.yaml`.
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+- **`for:`** evita alerta por piscada: `AppDown` só dispara depois de 5 min
+  sem réplica pronta; o burn rate crítico, depois de 2 min acima do limite
+  nas janelas de 1h **e** 5m.
+- **Inibição:** o app está fora, então é óbvio que está queimando budget. O
+  Alertmanager mostra só a causa (`AppDown`) e suprime a consequência. Um
+  problema, um alerta: é o que evita a "fadiga de alerta", quando o time
+  passa a ignorar notificações.
+- **Conserto:** `make lab-up`. O `AppDown` some em ~1 min. O burn rate some
+  logo depois porque a janela **curta** (5m) para de ver erro, mesmo com a
+  janela de 1h ainda "suja". É para isso que a janela curta existe.
+- Repare que nada disso precisou de código no app: o SLI vem do Ingress.
+- Mais em [13-alertas-slo.md](13-alertas-slo.md).
+</details>
+
+---
+
 ## Desafio final: o incidente misterioso
 
 Peça para alguém (ou faça você, sem olhar) aplicar **duas** quebras ao mesmo
@@ -508,3 +562,4 @@ Esse formato (sintoma → evidência → causa → correção → prevenção) �
 | HTTP 502 | o destino existe, mas a conexão falha (porta errada, app caído) | `get endpoints` × porta do container |
 | HTTP 503 | nenhum pod pronto atrás do Service | `get endpoints` vazio |
 | "minha mudança sumiu" | selfHeal do ArgoCD | o Git é a fonte da verdade |
+| alerta *suppressed* | inibido por outro alerta mais grave do mesmo app | `make alerts`, Alertmanager |

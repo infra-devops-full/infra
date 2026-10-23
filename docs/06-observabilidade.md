@@ -25,6 +25,12 @@ O dashboard é gerado e versionado em
 [`k8s/grafana-dashboard-apps.yaml`](../k8s/grafana-dashboard-apps.yaml).
 Alterações feitas pela UI não persistem.
 
+## Dashboard *Platform / SLOs e alertas*
+
+Disponibilidade em 7 dias, error budget restante, burn rate por app e os
+alertas ativos. Conceitos, regras e runbooks em
+[13-alertas-slo.md](13-alertas-slo.md).
+
 ## PromQL: o mínimo útil
 
 ```promql
@@ -70,11 +76,13 @@ Labels disponíveis: `project`, `env`, `app`, `namespace`, `pod`, `container`.
 
 | Componente | Instalação | Configuração |
 | ---------- | ---------- | ------------ |
-| Prometheus + Grafana + Alertmanager | `setup.sh` (kube-prometheus-stack) | values inline no `setup.sh` (coleta a cada 60 s, retenção de 3 dias) |
+| Prometheus + Grafana + Alertmanager | `setup-observability.sh` (kube-prometheus-stack 92.11.0) | `config/observability/kube-prometheus-stack-values.yaml` (coleta a cada 60 s, retenção de 7 dias, rotas do Alertmanager) |
 | métricas do Ingress | `setup-observability.sh` | ServiceMonitor do ingress-nginx |
+| métricas do ArgoCD | `setup-observability.sh` | ServiceMonitor do application-controller |
+| regras de SLO e alertas | `apply-platform.sh` | `k8s/prometheus-rules-apps.yaml` (gerado por `scripts/dev/gen-prometheus-rules.py`) |
 | Loki 7.3.0 (single-binary) | `setup-observability.sh` | `config/observability/loki-values.yaml` |
 | Alloy 1.13.0 | `setup-observability.sh` | `config/observability/alloy-values.yaml` |
-| datasource Loki + dashboard | `apply-platform.sh` | `k8s/*.yaml` (sidecars do Grafana) |
+| datasource Loki + dashboards | `apply-platform.sh` | `k8s/*.yaml` (sidecars do Grafana) |
 
 Reinstalar/atualizar num cluster existente: `make observability`.
 

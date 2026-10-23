@@ -60,6 +60,16 @@ treinar o diagnóstico, veja [11-treino-quebre-e-conserte.md](11-treino-quebre-e
 | `password authentication failed` por 1 a 2 min após rotacionar | pods antigos do app (rolling update) com a senha velha | esperado; para quando eles terminam |
 | app usa a senha antiga | env é lido só na subida | `make rollout SERVICE=<app> NAMESPACE=<ns>` |
 
+## Alertas
+
+| Sintoma | Causa | Solução |
+| ------- | ----- | ------- |
+| regra nova não aparece em prometheus.devops.local/rules | o ConfigMap das regras leva ~1 a 2 min para chegar ao pod | aguardar; conferir `kubectl get prometheusrule -n monitoring` |
+| alerta fica em `pending` e não chega ao Alertmanager | ainda não passou o tempo do `for:` | esperado (ex.: `AppDown` exige 5 min) |
+| `AppErrorBudgetBurn` aparece como *suppressed* | inibido por `AppDown` do mesmo app, ou pelo crítico | esperado: um problema, um alerta |
+| `KubePodNotReady` em `svclb-ingress-nginx-controller-*` (`Pending`, `didn't have free ports`) | o Service do Ingress é `LoadBalancer` (o servicelb do k3s quer as portas 80/443 em todo node) **e** o controller usa `hostPort` 80/443 no node onde roda | o tráfego funciona pelo outro node; para limpar, usar só um dos dois mecanismos (`hostPort` **ou** `LoadBalancer`) |
+| dashboard de SLO mostra "No data" para um app | o app não tem Ingress, ou não recebeu nenhum request | o SLI vem do Ingress; gere tráfego |
+
 ## Helm e ArgoCD
 
 | Sintoma | Causa | Solução |

@@ -1,0 +1,895 @@
+# =============================================================================
+# Dashboard "Platform / SLOs e alertas" — GERADO por scripts/dev/gen-dashboard-slo.py
+# (edite o gerador, não este arquivo). Usa as recording rules app:* de
+# k8s/prometheus-rules-apps.yaml. SLO de disponibilidade: 99.5% em 7 dias.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-dashboard-slos
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Platform"
+data:
+  platform-slos.json: |
+    {
+      "uid": "platform-slos",
+      "title": "Platform / SLOs e alertas",
+      "tags": [
+        "platform",
+        "slo",
+        "alerts"
+      ],
+      "editable": true,
+      "schemaVersion": 39,
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "refresh": "1m",
+      "links": [
+        {
+          "title": "Apps (requests, logs, recursos)",
+          "type": "link",
+          "url": "/d/platform-apps",
+          "keepTime": true,
+          "includeVars": false,
+          "icon": "dashboard"
+        },
+        {
+          "title": "Alertmanager",
+          "type": "link",
+          "url": "http://alertmanager.devops.local",
+          "targetBlank": true,
+          "icon": "bolt"
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "project",
+            "label": "Projeto",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": {
+              "query": "label_values(app:requests:rate5m, project)",
+              "refId": "project"
+            },
+            "definition": "label_values(app:requests:rate5m, project)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "sort": 1
+          },
+          {
+            "name": "env",
+            "label": "Ambiente",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": {
+              "query": "label_values(app:requests:rate5m{project=~\"$project\"}, env)",
+              "refId": "env"
+            },
+            "definition": "label_values(app:requests:rate5m{project=~\"$project\"}, env)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "sort": 1
+          },
+          {
+            "name": "app",
+            "label": "App",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": {
+              "query": "label_values(app:requests:rate5m{project=~\"$project\", env=~\"$env\"}, app)",
+              "refId": "app"
+            },
+            "definition": "label_values(app:requests:rate5m{project=~\"$project\", env=~\"$env\"}, app)",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "sort": 1
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "Resumo (seleção atual, janela de 7 dias)",
+          "collapsed": false,
+          "panels": [],
+          "id": 1,
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Disponibilidade 7d",
+          "description": "Requests não-5xx / total no Ingress em 7 dias. SLO = 99.5%.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "1 - (sum(increase(nginx_ingress_controller_requests{exported_namespace=~\"($project)-($env)\", ingress=~\"$app\", status=~\"5..\"}[7d])) or vector(0)) / sum(increase(nginx_ingress_controller_requests{exported_namespace=~\"($project)-($env)\", ingress=~\"$app\"}[7d]))",
+              "refId": "A",
+              "legendFormat": "",
+              "format": "time_series",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 3,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.995
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.999
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "id": 2,
+          "gridPos": {
+            "x": 0,
+            "y": 1,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Error budget restante",
+          "description": "Quanto dos 0,5% de erro permitidos em 7 dias ainda sobra. Negativo = SLO estourado.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "1 - ((1 - (1 - (sum(increase(nginx_ingress_controller_requests{exported_namespace=~\"($project)-($env)\", ingress=~\"$app\", status=~\"5..\"}[7d])) or vector(0)) / sum(increase(nginx_ingress_controller_requests{exported_namespace=~\"($project)-($env)\", ingress=~\"$app\"}[7d])))) / (1 - 0.995))",
+              "refId": "A",
+              "legendFormat": "",
+              "format": "time_series",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.25
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "id": 3,
+          "gridPos": {
+            "x": 6,
+            "y": 1,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Burn rate (1h)",
+          "description": "Velocidade de gasto do budget (pior app). 1x = gasta tudo em 7 dias; 14,4x dispara alerta crítico.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max(app:request_errors:ratio_rate1h{project=~\"$project\", env=~\"$env\", app=~\"$app\"}) / (1 - 0.995)",
+              "refId": "A",
+              "legendFormat": "",
+              "format": "time_series",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "x",
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 6
+                  },
+                  {
+                    "color": "red",
+                    "value": 14.4
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "id": 4,
+          "gridPos": {
+            "x": 12,
+            "y": 1,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Alertas disparando",
+          "description": "Alertas da plataforma com os labels project/env/app da seleção.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(ALERTS{alertstate=\"firing\", project=~\"$project\", env=~\"$env\", app=~\"$app\"}) or vector(0)",
+              "refId": "A",
+              "legendFormat": "",
+              "format": "time_series",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "id": 5,
+          "gridPos": {
+            "x": 18,
+            "y": 1,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "type": "row",
+          "title": "Por app",
+          "collapsed": false,
+          "panels": [],
+          "id": 6,
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "table",
+          "title": "SLIs por app",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "1 - app:request_errors:ratio_rate1h{project=~\"$project\", env=~\"$env\", app=~\"$app\"}",
+              "refId": "A",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "app:request_errors:ratio_rate1h{project=~\"$project\", env=~\"$env\", app=~\"$app\"} / (1 - 0.995)",
+              "refId": "B",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "app:request_errors:ratio_rate6h{project=~\"$project\", env=~\"$env\", app=~\"$app\"} / (1 - 0.995)",
+              "refId": "C",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "app:request_duration_seconds:p95_5m{project=~\"$project\", env=~\"$env\", app=~\"$app\"}",
+              "refId": "D",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "app:requests:rate5m{project=~\"$project\", env=~\"$env\", app=~\"$app\"}",
+              "refId": "E",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "description": "Burn rate: 14,4x (1h) = crítico, 6x (6h) = warning. Vazio = sem tráfego.",
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "exported_namespace": true,
+                  "ingress": true
+                },
+                "indexByName": {
+                  "project": 0,
+                  "env": 1,
+                  "app": 2,
+                  "Value #A": 3,
+                  "Value #B": 4,
+                  "Value #C": 5,
+                  "Value #D": 6,
+                  "Value #E": 7
+                },
+                "renameByName": {
+                  "Value #A": "Disponib. 1h",
+                  "Value #B": "Burn 1h",
+                  "Value #C": "Burn 6h",
+                  "Value #D": "p95",
+                  "Value #E": "req/s"
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Disponib. 1h"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percentunit"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "Burn.*"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "x"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "orange",
+                          "value": 6
+                        },
+                        {
+                          "color": "red",
+                          "value": 14.4
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p95"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 3
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "req/s"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "reqps"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "Burn 1h",
+                "desc": true
+              }
+            ]
+          },
+          "id": 7,
+          "gridPos": {
+            "x": 0,
+            "y": 6,
+            "w": 24,
+            "h": 8
+          }
+        },
+        {
+          "type": "row",
+          "title": "Ao longo do tempo",
+          "collapsed": false,
+          "panels": [],
+          "id": 8,
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Burn rate (1h) por app",
+          "description": "Linhas tracejadas: 6x (warning, janela 6h) e 14,4x (crítico, janela 1h).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "app:request_errors:ratio_rate1h{project=~\"$project\", env=~\"$env\", app=~\"$app\"} / (1 - 0.995)",
+              "refId": "A",
+              "legendFormat": "{{project}}/{{env}} {{app}}",
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "x",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "transparent",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 6
+                  },
+                  {
+                    "color": "red",
+                    "value": 14.4
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "id": 9,
+          "gridPos": {
+            "x": 0,
+            "y": 15,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Taxa de erro 5xx (5m) por app",
+          "description": "Fração de requests 5xx. Linha tracejada: 0,5% (o SLO).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "app:request_errors:ratio_rate5m{project=~\"$project\", env=~\"$env\", app=~\"$app\"}",
+              "refId": "A",
+              "legendFormat": "{{project}}/{{env}} {{app}}",
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "transparent",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.0050000000000000044
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "id": 10,
+          "gridPos": {
+            "x": 12,
+            "y": 15,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "type": "row",
+          "title": "Alertas",
+          "collapsed": false,
+          "panels": [],
+          "id": 11,
+          "gridPos": {
+            "x": 0,
+            "y": 23,
+            "w": 24,
+            "h": 1
+          }
+        },
+        {
+          "type": "table",
+          "title": "Alertas ativos (Prometheus → Alertmanager)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Detalhes, silêncios e histórico em http://alertmanager.devops.local",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "ALERTS{alertstate=~\"firing|pending\", project=~\"$project\", env=~\"$env\", app=~\"$app\"}",
+              "refId": "A",
+              "legendFormat": "",
+              "format": "table",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "__name__": true,
+                  "exported_namespace": true,
+                  "ingress": true,
+                  "container": true,
+                  "endpoint": true,
+                  "instance": true,
+                  "job": true,
+                  "pod": true,
+                  "service": true,
+                  "uid": true
+                },
+                "indexByName": {
+                  "alertstate": 0,
+                  "severity": 1,
+                  "alertname": 2,
+                  "project": 3,
+                  "env": 4,
+                  "app": 5
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "severity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "critical": {
+                            "color": "red",
+                            "index": 0
+                          },
+                          "warning": {
+                            "color": "orange",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true
+          },
+          "id": 12,
+          "gridPos": {
+            "x": 0,
+            "y": 24,
+            "w": 24,
+            "h": 7
+          }
+        }
+      ]
+    }

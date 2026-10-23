@@ -10,14 +10,14 @@ saber onde olhar quando algo der errado.
 make setup
   └─ setup.sh
        ├─ doctor.sh                       confere antes de começar
-       ├─ (k3d, ingress, argocd, prometheus/grafana — dentro do setup.sh)
-       ├─ setup-observability.sh          métricas do ingress, Loki, Alloy
+       ├─ (k3d, ingress, argocd — dentro do setup.sh)
+       ├─ setup-observability.sh          Prometheus/Alertmanager/Grafana, métricas, Loki, Alloy
        ├─ setup-sealed-secrets.sh         controller + restaura/backup da chave
        ├─ apply-project.sh  (por projeto)
        │    ├─ kubectl apply sealed/<env>/  (SealedSecrets → Secrets)
        │    ├─ setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh  (leem os Secrets)
        │    └─ ../create-ghcr-secrets.sh  (se houver GITHUB_TOKEN)
-       ├─ apply-platform.sh               ArgoCD genérico + dashboards
+       ├─ apply-platform.sh               ArgoCD genérico + dashboards + regras de alerta
        └─ hosts.sh apply                  /etc/hosts
 
 lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts existem?"
@@ -29,7 +29,8 @@ lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts 
 | ------ | -------------------- | ------------------- |
 | `lib-project.sh` | descobrir projetos, apps, ambientes, hosts e dependências a partir de `projects/` (biblioteca) | — |
 | `apply-platform.sh` | aplicar `argocd/` e `k8s/`, preenchendo a URL do repo (`envsubst`) | `make apply-argocd`, `make render-platform` |
-| `setup-observability.sh` | métricas do Ingress + Loki + Alloy | `make observability` |
+| `setup-observability.sh` | kube-prometheus-stack (values em `config/observability/`), métricas do Ingress e do ArgoCD, Loki, Alloy | `make observability` |
+| `dev/gen-prometheus-rules.py`, `dev/gen-dashboard-slo.py` | gerar `k8s/prometheus-rules-apps.yaml` e o dashboard de SLO (edite os geradores, não o YAML) | `make gen-observability` |
 | `apply-project.sh` | preparar o que o ArgoCD **não** cria: namespaces, SealedSecrets (antes das dependências), bancos, filas | `make project-apply` |
 | `setup-sealed-secrets.sh` | instalar o controller do Sealed Secrets e fazer backup/restauração da chave | `make sealed-secrets` |
 | `seal-secrets.sh` | `secrets/<env>.env` → `sealed/<env>/*.yaml` (gera senhas de infra que faltarem) | `make seal` |
@@ -47,11 +48,11 @@ Todos são **idempotentes**: rodar de novo não quebra nada, só reconcilia.
 
 | Frequência | Comandos |
 | ---------- | -------- |
-| **todo dia** | `status`, `pods`, `apps`, `logs`, `describe`, `events` |
+| **todo dia** | `status`, `alerts`, `pods`, `apps`, `logs`, `describe`, `events` |
 | **quando algo muda** | `project-apply`, `seal`, `rollout`, `refresh`, `hosts`, `doctor` |
 | **raramente** | `setup`, `destroy`, `start`, `stop`, `github`, `observability`, `sealed-secrets`, `apply-argocd`, `postgres`, `ghcr` |
-| **validar antes do commit** | `helm-lint`, `helm-template`, `render-platform`, `projects` |
-| **acesso** | `shell`, `pf`, `grafana`, `argocd`, `prometheus`, `k9s` |
+| **validar antes do commit** | `helm-lint`, `helm-template`, `render-platform`, `gen-observability`, `projects` |
+| **acesso** | `shell`, `pf`, `grafana`, `argocd`, `prometheus`, `alertmanager`, `k9s` |
 | **treino** | `lab-up`, `lab-status`, `lab-down` |
 
 `make help` lista todos, com o uso de cada um.

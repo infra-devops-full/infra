@@ -1,4 +1,4 @@
-.PHONY: help setup start stop restart destroy status logs k9s grafana prometheus argocd \
+.PHONY: help setup start stop restart destroy status logs k9s grafana prometheus alertmanager argocd alerts gen-observability \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -128,9 +128,23 @@ github: ## Configura o GitHub dos apps (develop, deploy key, proteção da main)
 hosts: ## Regrava o bloco da plataforma no /etc/hosts (sudo). Ver antes: ./scripts/hosts.sh show
 	@./scripts/hosts.sh apply
 
-observability: ## Instala/atualiza métricas do Ingress, Loki e Alloy + dashboard (cluster existente)
+observability: ## Instala/atualiza Prometheus/Alertmanager/Grafana, Loki, Alloy, alertas e dashboards (cluster existente)
 	@./scripts/setup-observability.sh
 	@./scripts/apply-platform.sh
+
+gen-observability: ## Regenera k8s/prometheus-rules-apps.yaml e o dashboard de SLO (depois: make apply-argocd)
+	@python3 scripts/dev/gen-prometheus-rules.py > k8s/prometheus-rules-apps.yaml
+	@python3 scripts/dev/gen-dashboard-slo.py > k8s/grafana-dashboard-slo.yaml
+	@echo "$(GREEN)✅ k8s/prometheus-rules-apps.yaml e k8s/grafana-dashboard-slo.yaml gerados$(RESET)"
+
+alerts: ## Alertas ativos no Alertmanager (silenciados/inibidos marcados)
+	@kubectl get --raw '/api/v1/namespaces/monitoring/services/kube-prometheus-stack-alertmanager:9093/proxy/api/v2/alerts' \
+		| jq -r '(["ESTADO","SEVERIDADE","ALERTA","PROJETO/ENV","APP","RESUMO"] | @tsv), \
+			(sort_by(.labels.severity) | .[] | select(.labels.alertname | IN("Watchdog", "InfoInhibitor") | not) \
+			| [.status.state, .labels.severity, .labels.alertname, \
+			   ((.labels.project // "-") + "/" + (.labels.env // "-")), (.labels.app // "-"), \
+			   (.annotations.summary // .annotations.description // "" | .[0:80])] | @tsv)' \
+		| column -t -s $$'\t'
 
 apply-argocd: ## (Re)aplica a plataforma genérica: argocd/ + k8s/
 	@./scripts/apply-platform.sh
@@ -188,6 +202,8 @@ grafana: ## Abre o Grafana no browser
 	@open http://grafana.devops.local
 prometheus: ## Abre o Prometheus no browser
 	@open http://prometheus.devops.local
+alertmanager: ## Abre o Alertmanager no browser
+	@open http://alertmanager.devops.local
 argocd: ## Abre o ArgoCD no browser
 	@open http://argocd.devops.local
 

@@ -6,7 +6,7 @@ NGINX Ingress, ArgoCD, Prometheus e Grafana. Cada aplicação entra como um
 
 > 📚 **Documentação detalhada e treino:** [`docs/`](docs/README.md). Lá estão a
 > arquitetura, GitOps, CI/CD, observabilidade, o mapa dos scripts,
-> troubleshooting, roteiro de estudo e **15 exercícios de "quebre e conserte"**
+> troubleshooting, roteiro de estudo e **16 exercícios de "quebre e conserte"**
 > num laboratório isolado (`make lab-up`).
 
 Tudo fora de `projects/` é genérico e não cita nenhuma aplicação:
@@ -666,11 +666,11 @@ Como funciona:
 Instalação: o `make setup` já instala tudo. Num cluster existente, use:
 
 ```bash
-make observability   # métricas do Ingress + Loki + Alloy + dashboard e datasource
+make observability   # Prometheus/Alertmanager/Grafana + Ingress + Loki + Alloy + alertas + dashboards
 ```
 
 Arquivos: `scripts/setup-observability.sh`,
-`config/observability/{loki,alloy}-values.yaml`,
+`config/observability/{kube-prometheus-stack,loki,alloy}-values.yaml`,
 `k8s/grafana-dashboard-apps.yaml` e `k8s/grafana-datasource-loki.yaml`.
 
 ## 11. Qualidade e segurança (CI)
@@ -741,3 +741,22 @@ git add projects/<p>/sealed && git commit && git push
   apaga, e o `make setup` restaura. Guarde uma cópia fora da máquina.
 - Rotação, recuperação de desastre e problemas comuns:
   [docs/12-segredos.md](docs/12-segredos.md).
+
+## 13. Alertas e SLOs
+
+Todo app com Ingress ganha, sem configurar nada, um **SLO de 99,5% de
+requests sem 5xx em 7 dias** e alertas que avisam quando o error budget está
+acabando rápido demais (multi-burn-rate), além de latência p95 alta, app sem
+réplica pronta e Application do ArgoCD degradada ou fora de sincronia. Todo
+alerta tem os labels `project`, `env` e `app`.
+
+```bash
+make alerts          # alertas ativos no terminal
+make alertmanager    # UI: agrupamento, silêncios, inibições
+make grafana         # dashboard "Platform / SLOs e alertas"
+```
+
+Por enquanto os alertas só aparecem nas UIs. Para mandar para Discord, Slack
+ou Telegram (com o webhook selado), veja
+[docs/13-alertas-slo.md](docs/13-alertas-slo.md), que também tem os conceitos
+e um runbook por alerta.

@@ -1,0 +1,116 @@
+# =============================================================================
+# kube-prometheus-stack (Prometheus, Alertmanager, Grafana) — values do lab.
+# Aplicado por scripts/setup-observability.sh (make setup / make observability).
+# =============================================================================
+
+# Enxuto para lab: o k3s não expõe etcd/scheduler/controller-manager/proxy
+# separados — coletar esses alvos só gera scrape falhando e alerta falso.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
+  disabled:
+    # Nodes do k3d são containers: o node-exporter não enxerga o NTP do host e
+    # acusa relógio dessincronizado para sempre. O NodeClockSkewDetected
+    # (desvio real) continua ligado.
+    NodeClockNotSynchronising: true
+
+prometheus:
+  prometheusSpec:
+    # 7 dias = janela do SLO (k8s/prometheus-rules-apps.yaml). O retentionSize
+    # corta antes se o disco do lab encher.
+    retention: 7d
+    retentionSize: 4GB
+    scrapeInterval: 60s
+    evaluationInterval: 60s
+    resources:
+      requests: { cpu: 100m, memory: 384Mi }
+      limits:   { cpu: 500m, memory: 1536Mi }
+    # Carrega ServiceMonitors/PrometheusRules de qualquer namespace, sem
+    # exigir o label release=kube-prometheus-stack.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts: [prometheus.devops.local]
+    paths: [/]
+
+grafana:
+  adminPassword: "devops.local2026"
+  persistence:
+    enabled: false
+  sidecar:
+    dashboards:
+      enabled: true
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+        allowUiUpdates: true
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts: [grafana.devops.local]
+    path: /
+
+alertmanager:
+  enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts: [alertmanager.devops.local]
+    paths: [/]
+  # Por enquanto os alertas só aparecem na UI (alertmanager.devops.local e o
+  # painel "Platform / SLOs" no Grafana): o receiver "null" não envia nada.
+  # Para notificar (Discord, Slack, Telegram...) veja docs/13-alertas-slo.md:
+  # o webhook vira um Secret selado montado em
+  # alertmanager.alertmanagerSpec.secrets e lido via *_url_file.
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "null"
+      group_by: [alertname, project, env, app]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        # Alerta que sempre dispara: prova que o pipeline de alertas está vivo.
+        - receiver: "null"
+          matchers: ['alertname = "Watchdog"']
+        # Exemplo para quando houver canal (descomente e crie o receiver):
+        # - receiver: discord
+        #   matchers: ['severity =~ "critical|warning"', 'project != ""']
+    inhibit_rules:
+      # Crítico silencia o warning do mesmo alerta/app (ex.: burn rate rápido
+      # e lento disparando juntos).
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity =~ "warning|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['severity = "warning"']
+        target_matchers: ['severity = "info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['alertname = "InfoInhibitor"']
+        target_matchers: ['severity = "info"']
+        equal: [namespace]
+      # App fora do ar: não adianta avisar também de SLO/latência dele.
+      - source_matchers: ['alertname = "AppDown"']
+        target_matchers: ['alertname =~ "AppErrorBudgetBurn|AppHighLatencyP95"']
+        equal: [project, env, app]
+    receivers:
+      - name: "null"
+      # - name: discord
+      #   discord_configs:
+      #     - webhook_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/DISCORD_WEBHOOK_URL
+      #       send_resolved: true

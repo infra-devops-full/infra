@@ -12,7 +12,8 @@ make start | stop | restart
 make projects                      # projetos, apps e ambientes descobertos
 make project-apply PROJECT=<p>     # namespaces, dependências, secrets, hosts
 make github [PROJECT=<p>] [ARGS=--dry-run|--rotate|--no-protect]
-make observability                 # métricas do ingress, Loki, Alloy, dashboard
+make observability                 # Prometheus/Alertmanager/Grafana, Loki, Alloy, alertas, dashboards
+make gen-observability             # regenera regras de alerta e dashboard de SLO (k8s/)
 make apply-argocd | render-platform
 make hosts                         # regrava o bloco do /etc/hosts
 make helm-lint                     # valida todos os values
@@ -26,6 +27,7 @@ make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ## Dia a dia
 
 ```bash
+make alerts                        # alertas ativos (Alertmanager)
 make pods [NAMESPACE=<ns>]         # pods dos projetos
 make apps                          # Applications (sync/health)
 make logs     SERVICE=<a> NAMESPACE=<ns>
@@ -88,5 +90,6 @@ curl --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/
 | ArgoCD | http://argocd.devops.local (admin / senha no `make status`) |
 | Grafana | http://grafana.devops.local (admin / `devops.local2026`) |
 | Prometheus | http://prometheus.devops.local |
+| Alertmanager | http://alertmanager.devops.local |
 | crivo | http://develop.crivo.local · http://crivo.local |
 | wlstore | http://develop.wlstore.local · http://wlstore.local |

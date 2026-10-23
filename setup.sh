@@ -197,78 +197,15 @@ echo -e "${GREEN}✓ ArgoCD instalado - admin / $ARGOCD_PASSWORD${NC}"
 # ==============================================================================
 log_step "ETAPA 4/7: Observabilidade (Prometheus, Grafana, Loki)"
 
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
-helm repo update
-
-cat <<EOF > /tmp/prometheus-values.yaml
-# Enxuto para lab: o k3s não expõe etcd/scheduler/controller-manager/proxy
-# separados — coletar esses alvos só gera scrape falhando e alerta falso.
-kubeEtcd:
-  enabled: false
-kubeControllerManager:
-  enabled: false
-kubeScheduler:
-  enabled: false
-kubeProxy:
-  enabled: false
-defaultRules:
-  rules:
-    etcd: false
-    kubeControllerManager: false
-    kubeSchedulerAlerting: false
-    kubeSchedulerRecording: false
-    kubeProxy: false
-prometheus:
-  prometheusSpec:
-    retention: 3d
-    scrapeInterval: 60s
-    evaluationInterval: 60s
-    resources:
-      requests: { cpu: 100m, memory: 384Mi }
-      limits:   { cpu: 500m, memory: 1536Mi }
-    serviceMonitorSelectorNilUsesHelmValues: false
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hosts: [prometheus.devops.local]
-    paths: [/]
-grafana:
-  adminPassword: "devops.local2026"
-  persistence:
-    enabled: false
-  sidecar:
-    dashboards:
-      enabled: true
-      folderAnnotation: grafana_folder
-      provider:
-        foldersFromFilesStructure: true
-        allowUiUpdates: true
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hosts: [grafana.devops.local]
-    path: /
-alertmanager:
-  enabled: true
-  ingress:
-    enabled: true
-    ingressClassName: nginx
-    hosts: [alertmanager.devops.local]
-    paths: [/]
-EOF
-
-helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring --create-namespace \
-  --values /tmp/prometheus-values.yaml \
-  --timeout 10m --wait
+# Prometheus/Alertmanager/Grafana (config/observability/*-values.yaml),
+# métricas do Ingress e do ArgoCD, Loki e Alloy. O mesmo script roda no
+# `make observability` para atualizar um cluster existente.
+bash "$SCRIPT_DIR/scripts/setup-observability.sh"
 
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=grafana \
   --namespace=monitoring --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."
 echo -e "${GREEN}✓ Grafana instalado - admin / devops.local2026${NC}"
-
-# Métricas do Ingress (requests/status/latência), Loki e Alloy (logs dos apps).
-bash "$SCRIPT_DIR/scripts/setup-observability.sh"
 
 # ==============================================================================
 # ETAPA 5: Projetos (namespaces, dependências, secrets) + plataforma GitOps

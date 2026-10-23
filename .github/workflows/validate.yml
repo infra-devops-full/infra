@@ -4,6 +4,7 @@
 #
 #   helm-lint     charts/app contra cada projects/<p>/apps/<app>/values-<env>.yaml
 #   render        argocd/ + k8s/ renderizam e são YAML válido
+#   alertas       k8s/ gerado está atualizado e as regras passam no promtool
 #   shellcheck    scripts da plataforma
 #   actionlint    templates de workflow entregues aos repos dos apps
 # =============================================================================
@@ -35,6 +36,15 @@ jobs:
           ./scripts/apply-platform.sh --render > /tmp/platform.yaml
           yq -e 'true' /tmp/platform.yaml > /dev/null
           yq -N 'select(.kind != null) | .kind + " " + .metadata.name' /tmp/platform.yaml
+
+      - name: Regras de alerta e dashboard de SLO
+        run: |
+          make gen-observability
+          git diff --exit-code -- k8s/ || {
+            echo "::error::k8s/ desatualizado: rode make gen-observability e commite"; exit 1; }
+          yq '.spec' k8s/prometheus-rules-apps.yaml > /tmp/rules.yaml
+          docker run --rm -v /tmp:/w --entrypoint promtool prom/prometheus:v3.5.0 \
+            check rules /w/rules.yaml
 
       - name: ShellCheck
         run: shellcheck -S error setup.sh destroy.sh status.sh create-ghcr-secrets.sh scripts/*.sh
