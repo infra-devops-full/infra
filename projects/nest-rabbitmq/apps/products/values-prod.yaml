@@ -1,5 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
-  tag: sha-12928e6
+  tag: sha-b0da91a
 env:
   NODE_ENV: production
