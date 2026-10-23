@@ -18,13 +18,11 @@ appRepo: https://github.com/geraldobl58/microservice-with-nestjs-rabbitmq
 rabbitmq:
   enabled: true
   user: nest
-  password: nest_password
 
 # Postgres: descomente quando o app precisar de banco → Secret `postgres`
 # (DATABASE_URL, DIRECT_URL).
 # database:
 #   user: nest
-#   password: nest_password
 #   defaultDb: products
 
 # Redis: → Secret `redis` (REDIS_URL, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD).

@@ -7,8 +7,9 @@ projects/<projeto>/                 # nome da pasta = nome do projeto
 ├── project.yaml                    # dependências que a plataforma provisiona
 ├── logo.png                        # logo no Grafana (PNG ~256px)
 ├── secrets/
-│   ├── example.env                 # segredos de lab (versionado)
-│   └── <env>.env                   # segredos reais (gitignored)
+│   ├── example.env                 # modelo dos segredos (versionado, valores fictícios)
+│   └── <env>.env                   # valores reais (gitignored)
+├── sealed/<env>/*.yaml             # segredos SELADOS (make seal, versionados)
 └── apps/<app>/                     # nome da pasta = nome do app/Service/imagem
     ├── values.yaml                 # comum a todos os ambientes
     ├── values-develop.yaml         # um arquivo POR AMBIENTE
@@ -30,31 +31,31 @@ projects/<projeto>/                 # nome da pasta = nome do projeto
 appRepo: https://github.com/<owner>/<repo>   # usado pelo `make github` e pelo doctor
 
 database:                 # Postgres por ambiente → Secret `postgres`
-  user: app
-  password: app_password
+  user: app               # SENHAS NÃO VÃO AQUI: `make seal` gera e sela
   defaultDb: app
   extraDbs: [outro_db]    # um banco por serviço, no mesmo Postgres
 
-redis:                    # → Secret `redis`
+redis:                    # → Secret `redis` (com senha gerada)
   enabled: true
-  password: ""            # opcional
 
 rabbitmq:                 # → Secret `rabbitmq`
   enabled: true
   user: app
-  password: app_password
 
 extraHosts: [ferramenta.devops.local]   # hosts extras no /etc/hosts
 ```
 
 ## Secrets que a plataforma cria
 
+Todos (menos o `ghcr-secret`) vêm de **SealedSecrets** em `sealed/<env>/`,
+gerados por `make seal`. Veja [12-segredos.md](12-segredos.md).
+
 | Origem | Secret | Chaves |
 | ------ | ------ | ------ |
 | `database` | `postgres` | `DATABASE_URL`, `DIRECT_URL` (`postgresql://`), `JDBC_URL`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` |
 | `redis` | `redis` | `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
 | `rabbitmq` | `rabbitmq` | `RABBITMQ_URL`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
-| `secrets/<env>.env` (ou `example.env`) | `app-secrets` | as chaves do arquivo |
+| demais chaves do `secrets/<env>.env` | `app-secrets` | as chaves do arquivo |
 | `GITHUB_TOKEN` válido no `.env` | `ghcr-secret` | credencial de pull do GHCR |
 
 ## `values.yaml`: o que cada app costuma definir
@@ -95,9 +96,9 @@ Outros campos do chart: `ingress.enabled/host/path`, `autoscaling` (HPA),
 
 | Quero adicionar | Passos |
 | --------------- | ------ |
-| **um projeto** | `projects/<p>/` com `project.yaml`, `logo.png` e `apps/` → `make helm-lint` → commit/push → `make project-apply PROJECT=<p>` → `make github PROJECT=<p>` → Dockerfile e workflow no repo do app |
+| **um projeto** | `projects/<p>/` com `project.yaml`, `logo.png` e `apps/` → `make seal PROJECT=<p>` → `make helm-lint` → commit/push → `make project-apply PROJECT=<p>` → `make github PROJECT=<p>` → Dockerfile e workflow no repo do app |
 | **um app** | `apps/<app>/values.yaml` + um `values-<env>.yaml` por ambiente → item no `APPS_JSON` do workflow do app → commit/push dos dois repos |
-| **um ambiente** (ex.: `staging`) | `values-staging.yaml` em cada app → `make project-apply` (cria o namespace e as dependências) → no workflow, mapear a branch para `DEPLOY_ENV=staging` |
+| **um ambiente** (ex.: `staging`) | `values-staging.yaml` em cada app → `make seal PROJECT=<p> ENV=staging` → commit → `make project-apply` (cria o namespace e as dependências) → no workflow, mapear a branch para `DEPLOY_ENV=staging` |
 | **um microfrontend** | mesmo host do shell + `ingress.path` == `basePath` (veja abaixo) |
 | **um banco para um serviço novo** | `extraDbs` no `project.yaml` → `make postgres PROJECT=<p> ENV=<e>` (recria o Postgres; dados de lab se perdem) |
 

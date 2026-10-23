@@ -6,7 +6,7 @@ NGINX Ingress, ArgoCD, Prometheus e Grafana. Cada aplicação entra como um
 
 > 📚 **Documentação detalhada e treino:** [`docs/`](docs/README.md). Lá estão a
 > arquitetura, GitOps, CI/CD, observabilidade, o mapa dos scripts,
-> troubleshooting, roteiro de estudo e **14 exercícios de "quebre e conserte"**
+> troubleshooting, roteiro de estudo e **15 exercícios de "quebre e conserte"**
 > num laboratório isolado (`make lab-up`).
 
 Tudo fora de `projects/` é genérico e não cita nenhuma aplicação:
@@ -39,7 +39,8 @@ GitHub Actions ── build ──► ghcr.io/<owner>/<repo>/<app>:sha-xxxxxxx
 projects/<projeto>/
 ├── project.yaml                  # dependências: database, redis, rabbitmq
 ├── logo.png                      # logo no dashboard do Grafana (PNG, ~256px)
-├── secrets/example.env           # segredos de lab (opcional)
+├── secrets/example.env           # modelo dos segredos (valores fictícios)
+├── sealed/<env>/*.yaml           # segredos SELADOS (gerados por make seal, commitados)
 └── apps/<app>/
     ├── values.yaml               # imagem, porta, probes, env, envFrom
     ├── values-develop.yaml       # um arquivo por ambiente
@@ -108,7 +109,7 @@ GitHub.
 | 2 | branch `develop`, `INFRA_DEPLOY_KEY`, proteção da `main` | **repo de cada app** + deploy key no repo de infra | **um comando**: `make github` (2.2) |
 | 3 | `.github/workflows/deploy.yml` | repo de cada app | copiar de `templates/github/deploy.yml` (4.2) |
 | 4 | variáveis não sensíveis do app | `projects/<p>/apps/<app>/values*.yaml` → `env:` | editar e commitar (2.4) |
-| 5 | segredos do app | `projects/<p>/secrets/<env>.env` | arquivo local + `make secrets` (2.4) |
+| 5 | segredos do app e senhas de infra | `projects/<p>/secrets/<env>.env` (local) → `sealed/<env>/` (Git) | `make seal` (2.4 e [docs/12-segredos](docs/12-segredos.md)) |
 | 6 | `GITHUB_TOKEN` (PAT classic `read:packages`) | `.env` da infra | **só se alguma imagem for privada** (2.3) |
 
 > **O repo do app não tem `.env`, token nem variável de deploy para criar à
@@ -197,13 +198,14 @@ Ficam neste repo, separadas por sensibilidade:
 | Não sensível, igual em todo ambiente | `apps/<app>/values.yaml` → `env:` | sim | env do container |
 | Não sensível, por ambiente (URLs, flags) | `apps/<app>/values-<env>.yaml` → `env:` | sim | env do container (sobrescreve) |
 | Segredo (JWT, Stripe, API keys) | `projects/<p>/secrets/<env>.env` | **não** | Secret `app-secrets` → `envFrom` |
-| Segredo de lab (fictício) | `projects/<p>/secrets/example.env` | sim | fallback quando falta o `<env>.env` |
+| Segredo de lab (fictício) | `projects/<p>/secrets/example.env` | sim | modelo: o `make seal` copia para o `<env>.env` na primeira vez |
+| Segredo selado | `projects/<p>/sealed/<env>/*.yaml` | **sim** (criptografado) | o ArgoCD aplica, o controller abre e vira Secret |
 | Conexões (Postgres/Redis/RabbitMQ) | geradas pela plataforma a partir do `project.yaml` | — | Secrets `postgres` / `redis` / `rabbitmq` → `envFrom` |
 
 Depois de mudar um `secrets/<env>.env`:
 
 ```bash
-make secrets PROJECT=crivo ENV=develop              # recria o app-secrets
+make seal PROJECT=crivo ENV=develop                 # sela de novo (commite projects/crivo/sealed)
 make rollout SERVICE=crivo-be NAMESPACE=crivo-develop # pods leem env só no start
 ```
 
@@ -285,8 +287,10 @@ make projects        # projetos, apps e ambientes descobertos
    na tabela abaixo).
 4. Crie um `apps/api/values-<env>.yaml` para cada ambiente, com pelo menos
    `image.tag: latest`.
-5. Se houver segredos, crie `secrets/example.env` com valores fictícios. Os
-   reais vão em `secrets/<env>.env`, que é gitignored.
+5. Se houver segredos, crie `secrets/example.env` com valores fictícios e
+   rode `make seal PROJECT=meu-app`. Ele cria os `secrets/<env>.env` (locais),
+   gera as senhas de banco e fila e grava os arquivos **selados** em
+   `sealed/<env>/`, que vão para o Git. Veja [docs/12-segredos](docs/12-segredos.md).
 6. Valide sem cluster:
    ```bash
    make projects
@@ -304,10 +308,10 @@ Secrets que a plataforma cria em cada namespace `<projeto>-<env>`:
 
 | `project.yaml` | Secret | Chaves |
 | -------------- | ------ | ------ |
-| `database: {user, password, defaultDb, extraDbs}` | `postgres` | `DATABASE_URL`, `DIRECT_URL` (`postgresql://`, Prisma/Node), `JDBC_URL` (Java), `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` |
-| `redis: {enabled: true, password?}` | `redis` | `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
-| `rabbitmq: {enabled: true, user, password}` | `rabbitmq` | `RABBITMQ_URL`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
-| `secrets/<env>.env` (ou `example.env`) | `app-secrets` | as chaves do arquivo |
+| `database: {user, defaultDb, extraDbs}` | `postgres` | `DATABASE_URL`, `DIRECT_URL` (`postgresql://`, Prisma/Node), `JDBC_URL` (Java), `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` |
+| `redis: {enabled: true}` | `redis` | `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
+| `rabbitmq: {enabled: true, user}` | `rabbitmq` | `RABBITMQ_URL`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| demais chaves do `secrets/<env>.env` | `app-secrets` | as chaves do arquivo |
 | `GITHUB_TOKEN` no `.env` | `ghcr-secret` | pull de imagens do GHCR |
 
 Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
@@ -468,7 +472,8 @@ make setup | status | destroy
 make start | stop | restart
 make projects             # projetos, apps e ambientes descobertos
 make project-apply PROJECT=<p>                 # deps + secrets + hosts de um projeto
-make secrets  PROJECT=<p> ENV=<e>              # recria o app-secrets
+make seal PROJECT=<p> [ENV=<e>]                # gera os SealedSecrets (commitáveis)
+make sealed-secrets                            # controller + backup/restauração da chave
 make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
 make apply-argocd         # reaplica argocd/ + k8s/
 make render-platform      # mostra argocd/ + k8s/ renderizados
@@ -552,7 +557,8 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── lib-project.sh            # descoberta de projetos/apps/ambientes
 │   ├── apply-project.sh          # namespaces + dependências + secrets
 │   ├── apply-platform.sh         # argocd/ + k8s/
-│   ├── apply-secrets.sh          # Secret app-secrets
+│   ├── setup-sealed-secrets.sh   # controller do Sealed Secrets + backup da chave
+│   ├── seal-secrets.sh           # secrets/<env>.env → sealed/<env>/*.yaml
 │   ├── setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh
 │   ├── setup-observability.sh    # métricas do Ingress + Loki + Alloy
 │   ├── hosts.sh                  # bloco isolado no /etc/hosts
@@ -576,7 +582,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 | `ImagePullBackOff` + `no match for platform in manifest` | imagem só `amd64`; os nodes do k3d no Mac Apple Silicon são `arm64` | o workflow do template já publica `linux/amd64,linux/arm64`; rode o CI de novo |
 | `ImagePullBackOff` + `not found` | a imagem/tag ainda não foi publicada | rodar o CI do app |
 | `CreateContainerConfigError` | falta um Secret do `envFrom` | `make project-apply PROJECT=<p>` |
-| API reinicia em loop | segredo obrigatório ausente | conferir `secrets/<env>.env` e rodar `make secrets …` |
+| API reinicia em loop | segredo obrigatório ausente | conferir `secrets/<env>.env`, `make seal`, commit e `make rollout …` |
 | `*.local` não resolve | cache mDNS do macOS | `make hosts`, ou `curl --resolve host:80:127.0.0.1` |
 | Job `deploy` do CI: `INFRA_DEPLOY_KEY ausente` | o repo do app ainda não foi configurado | `make github PROJECT=<p>` |
 | Job `deploy` do CI: `could not read Username` / `Permission denied (publickey)` | credencial do repo de infra inválida (PAT antigo, deploy key apagada ou só leitura) | `make github PROJECT=<p> ARGS=--rotate` |
@@ -716,3 +722,22 @@ todo push e PR: `helm-lint` de todos os apps e ambientes, render de `argocd/` e
 deploy do CI dos apps levam `[skip ci]`. A `main` da infra **não** é
 protegida, porque o CI dos apps faz push direto nela pela deploy key.
 
+
+## 12. Segredos (Sealed Secrets)
+
+Nenhuma senha fica em texto puro no Git. Os valores reais ficam em
+`projects/<p>/secrets/<env>.env` (local, gitignored). O `make seal` os
+criptografa com a chave pública do cluster em `projects/<p>/sealed/<env>/`,
+que **vai para o Git**. O ArgoCD aplica, e só o controller do cluster abre.
+
+```bash
+make sealed-secrets              # controller + backup/restauração da chave (o setup já faz)
+make seal PROJECT=<p> [ENV=<e>]  # gera senhas de banco/fila que faltarem e sela tudo
+git add projects/<p>/sealed && git commit && git push
+```
+
+- O backup da **chave privada** fica em
+  `~/.config/devops-platform/sealed-secrets/keys.yaml`. O `make destroy` nunca
+  apaga, e o `make setup` restaura. Guarde uma cópia fora da máquina.
+- Rotação, recuperação de desastre e problemas comuns:
+  [docs/12-segredos.md](docs/12-segredos.md).

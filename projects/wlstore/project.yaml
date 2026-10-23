@@ -25,7 +25,6 @@ appRepo: https://github.com/geraldobl58/wlstore
 # → Secret `postgres` com DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, JDBC_URL...
 database:
   user: wlstore
-  password: wlstore_password
   defaultDb: catalogdb
   extraDbs:
     - pricingdb
@@ -35,4 +34,3 @@ database:
 rabbitmq:
   enabled: true
   user: wlstore
-  password: wlstore_password

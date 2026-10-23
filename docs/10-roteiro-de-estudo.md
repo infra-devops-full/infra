@@ -33,8 +33,8 @@ e um exercício.
 | Fase | Entrega | Status |
 | ---- | ------- | ------ |
 | 1 | CI com lint + testes + Trivy + CodeQL + Dependabot, check `ci` obrigatório | ✅ feito |
-| 2 | **Sealed Secrets**: tirar as senhas do Git (`project.yaml`, `example.env`) | próximo |
-| 3 | **Alertas + SLOs**: Alertmanager com regras (5xx, restarts, latência) e notificação | |
+| 2 | **Sealed Secrets**: senhas fora do Git, segredos selados e aplicados pelo ArgoCD, backup da chave | ✅ feito |
+| 3 | **Alertas + SLOs**: Alertmanager com regras (5xx, restarts, latência) e notificação | próximo |
 | 4 | **HTTPS + NetworkPolicy + Kyverno**: cert-manager, isolamento entre namespaces, políticas de admissão | |
 | 5 | **Argo Rollouts**: canary com rollback automático por métricas | |
 | 6 | **Tracing**: OpenTelemetry + Tempo (front → API → RabbitMQ → serviço) | |

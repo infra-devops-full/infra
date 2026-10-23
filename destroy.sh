@@ -152,6 +152,13 @@ if [ -d "$DATA_DIR" ]; then
     fi
 fi
 
+# A chave do Sealed Secrets NUNCA é apagada aqui: sem ela, o próximo cluster
+# não abre os segredos commitados em projects/*/sealed/.
+SEALED_KEYS_DIR="$(eval echo "${SEALED_KEYS_DIR:-$HOME/.config/devops-platform/sealed-secrets}")"
+if [ -f "$SEALED_KEYS_DIR/keys.yaml" ]; then
+    echo -e "${BLUE}🔑 Chave do Sealed Secrets preservada em $SEALED_KEYS_DIR (restaurada no próximo make setup)${NC}"
+fi
+
 echo ""
 
 # ==============================================================================

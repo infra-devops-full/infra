@@ -93,3 +93,11 @@ local/setup*.log
 
 # Helm (only ignore .tgz packages, not infra/charts/)
 *.tgz
+
+# Sealed Secrets: os arquivos SELADOS e a chave PÚBLICA vão para o Git (é o
+# objetivo — só o controller do cluster abre). Exceções às regras acima de
+# *secret*.yaml e *.pem. A chave PRIVADA nunca fica no repo
+# (~/.config/devops-platform/sealed-secrets).
+!projects/*/sealed/
+!projects/*/sealed/**
+!config/sealed-secrets/cert.pem

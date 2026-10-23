@@ -3,10 +3,13 @@
 # setup-postgres.sh  (genérico)
 # -----------------------------------------------------------------------------
 # Cria PostgreSQL em um namespace:
-#   - Secret postgres  (DATABASE_URL, DIRECT_URL) para as apps via envFrom
 #   - ConfigMap postgres-init (cria bancos extras, se houver)
 #   - Service postgres (ClusterIP, 5432)
 #   - Deployment postgres com volume emptyDir (volátil)
+#
+# Usuário, senha e banco vêm do Secret `postgres` (DB_USER, DB_PASSWORD,
+# DB_NAME), criado a partir do SealedSecret do projeto (`make seal`) — nenhuma
+# credencial passa por aqui.
 #
 # emptyDir vs PVC: o local-path provisioner do k3d no macOS mapeia pra um
 # path no host; o Finder/Spotlight injeta arquivos AppleDouble (._*) ali e
@@ -15,32 +18,22 @@
 # seed são reprodutíveis.
 #
 # Uso:
-#   ./scripts/setup-postgres.sh --namespace <ns> [opções]
+#   ./scripts/setup-postgres.sh --namespace <ns> [--extra-dbs "a b"] [--reset]
 #
-# Opções:
-#   --namespace <ns>        (obrigatório) namespace alvo (ex.: meuapp-develop)
-#   --user <user>           usuário do Postgres          (default: postgres)
-#   --password <pass>       senha do Postgres            (default: postgres)
-#   --db <name>             banco principal (POSTGRES_DB)(default: app)
-#   --extra-dbs "a b c"     bancos extras a criar (lista separada por espaço)
-#   --reset                 apaga o deployment antes de recriar
+#   --namespace <ns>      (obrigatório) namespace alvo (ex.: meuapp-develop)
+#   --extra-dbs "a b c"   bancos extras a criar (lista separada por espaço)
+#   --reset               apaga o deployment antes de recriar
 # =============================================================================
 
 set -euo pipefail
 
 NS=""
-PG_USER="postgres"
-PG_PASS="postgres"
-PG_DB="app"
 EXTRA_DBS=""
 RESET=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --namespace) NS="$2"; shift 2 ;;
-    --user)      PG_USER="$2"; shift 2 ;;
-    --password)  PG_PASS="$2"; shift 2 ;;
-    --db)        PG_DB="$2"; shift 2 ;;
     --extra-dbs) EXTRA_DBS="$2"; shift 2 ;;
     --reset)     RESET=true; shift ;;
     *) echo "Argumento desconhecido: $1"; exit 1 ;;
@@ -48,35 +41,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NS" ]]; then
-  echo "Uso: $0 --namespace <ns> [--user u --password p --db name --extra-dbs \"a b\"] [--reset]"
+  echo "Uso: $0 --namespace <ns> [--extra-dbs \"a b\"] [--reset]"
   exit 1
 fi
 
 kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
+kubectl get secret postgres -n "$NS" >/dev/null 2>&1 || {
+  echo "❌ Secret postgres não existe em $NS — rode \`make seal PROJECT=<p>\` e \`make project-apply PROJECT=<p>\`"
+  exit 1
+}
+
+# Hash do Secret no template do pod: se a senha mudar (make seal), o
+# Deployment muda e o Kubernetes recria o pod com a credencial nova.
+SECRET_SUM="$(kubectl get secret postgres -n "$NS" -o jsonpath='{.data}' | shasum -a 256 | cut -c1-16)"
 
 if $RESET; then
   echo "🗑️  Reset solicitado, apagando deployment..."
   kubectl delete deploy postgres -n "$NS" --ignore-not-found --wait=true
 fi
-
-# Conexão para as apps (envFrom: [{ secretRef: postgres }]), em dois formatos:
-#   DATABASE_URL / DIRECT_URL  postgresql://… (Prisma, Node). DIRECT_URL = mesma
-#                              URL: no cluster não há pooler no caminho.
-#   JDBC_URL + DB_*            Java/Spring. Para outro banco do mesmo Postgres
-#                              (extraDbs), monte no values:
-#                              jdbc:postgresql://$(DB_HOST):$(DB_PORT)/<banco>
-DB_HOST="postgres.${NS}.svc.cluster.local"
-DB_URL="postgresql://${PG_USER}:${PG_PASS}@${DB_HOST}:5432/${PG_DB}?schema=public"
-kubectl -n "$NS" create secret generic postgres \
-  --from-literal=DATABASE_URL="$DB_URL" \
-  --from-literal=DIRECT_URL="$DB_URL" \
-  --from-literal=JDBC_URL="jdbc:postgresql://${DB_HOST}:5432/${PG_DB}" \
-  --from-literal=DB_HOST="$DB_HOST" \
-  --from-literal=DB_PORT="5432" \
-  --from-literal=DB_NAME="$PG_DB" \
-  --from-literal=DB_USER="$PG_USER" \
-  --from-literal=DB_PASSWORD="$PG_PASS" \
-  --dry-run=client -o yaml | kubectl apply -f -
 
 # Monta o bloco SQL de bancos extras
 EXTRA_SQL=""
@@ -140,17 +122,19 @@ spec:
     metadata:
       labels:
         app: postgres
+      annotations:
+        devops-platform/secret-checksum: "${SECRET_SUM}"
     spec:
       containers:
         - name: postgres
           image: postgres:16-alpine
           env:
             - name: POSTGRES_USER
-              value: ${PG_USER}
+              valueFrom: { secretKeyRef: { name: postgres, key: DB_USER } }
             - name: POSTGRES_PASSWORD
-              value: ${PG_PASS}
+              valueFrom: { secretKeyRef: { name: postgres, key: DB_PASSWORD } }
             - name: POSTGRES_DB
-              value: ${PG_DB}
+              valueFrom: { secretKeyRef: { name: postgres, key: DB_NAME } }
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           ports:
@@ -159,7 +143,7 @@ spec:
             exec:
               # -d explícito: sem ele o pg_isready conecta num banco com o nome
               # do usuário e, se não existir, o Postgres loga um FATAL a cada probe.
-              command: ["pg_isready", "-U", "${PG_USER}", "-d", "${PG_DB}"]
+              command: ["sh", "-c", "pg_isready -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\""]
             initialDelaySeconds: 10
             periodSeconds: 5
           resources:

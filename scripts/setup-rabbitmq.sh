@@ -2,9 +2,9 @@
 # =============================================================================
 # setup-rabbitmq.sh  (genérico)
 # -----------------------------------------------------------------------------
-# Cria RabbitMQ (com management UI) em um namespace:
-#   - Secret rabbitmq  (RABBITMQ_URL, RABBITMQ_HOST, RABBITMQ_PORT, RABBITMQ_USER,
-#                       RABBITMQ_PASSWORD)
+# Cria RabbitMQ (com management UI) em um namespace. Usuário e senha vêm do
+# Secret `rabbitmq` (RABBITMQ_URL, RABBITMQ_HOST, RABBITMQ_PORT, RABBITMQ_USER,
+# RABBITMQ_PASSWORD), criado a partir do SealedSecret do projeto (`make seal`).
 #   - Service rabbitmq (5672 AMQP, 15672 management)
 #   - Deployment rabbitmq com emptyDir (volátil — mesmo trade-off do Postgres)
 #
@@ -12,38 +12,34 @@
 # Management UI: kubectl port-forward -n <ns> svc/rabbitmq 15672:15672
 #
 # Uso:
-#   ./scripts/setup-rabbitmq.sh --namespace <ns> [--user u] [--password p]
+#   ./scripts/setup-rabbitmq.sh --namespace <ns>
 # =============================================================================
 
 set -euo pipefail
 
 NS=""
-RMQ_USER="guest"
-RMQ_PASS="guest"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --namespace) NS="$2"; shift 2 ;;
-    --user)      RMQ_USER="$2"; shift 2 ;;
-    --password)  RMQ_PASS="$2"; shift 2 ;;
     *) echo "Argumento desconhecido: $1"; exit 1 ;;
   esac
 done
 
 if [[ -z "$NS" ]]; then
-  echo "Uso: $0 --namespace <ns> [--user u --password p]"
+  echo "Uso: $0 --namespace <ns>"
   exit 1
 fi
 
 kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
+kubectl get secret rabbitmq -n "$NS" >/dev/null 2>&1 || {
+  echo "❌ Secret rabbitmq não existe em $NS — rode \`make seal PROJECT=<p>\` e \`make project-apply PROJECT=<p>\`"
+  exit 1
+}
 
-kubectl -n "$NS" create secret generic rabbitmq \
-  --from-literal=RABBITMQ_URL="amqp://${RMQ_USER}:${RMQ_PASS}@rabbitmq.${NS}.svc.cluster.local:5672" \
-  --from-literal=RABBITMQ_HOST="rabbitmq.${NS}.svc.cluster.local" \
-  --from-literal=RABBITMQ_PORT="5672" \
-  --from-literal=RABBITMQ_USER="${RMQ_USER}" \
-  --from-literal=RABBITMQ_PASSWORD="${RMQ_PASS}" \
-  --dry-run=client -o yaml | kubectl apply -f -
+# Hash do Secret no template do pod: se a senha mudar (make seal), o
+# Deployment muda e o Kubernetes recria o pod com a credencial nova.
+SECRET_SUM="$(kubectl get secret rabbitmq -n "$NS" -o jsonpath='{.data}' | shasum -a 256 | cut -c1-16)"
 
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -85,6 +81,8 @@ spec:
     metadata:
       labels:
         app: rabbitmq
+      annotations:
+        devops-platform/secret-checksum: "${SECRET_SUM}"
     spec:
       containers:
         - name: rabbitmq

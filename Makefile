@@ -1,5 +1,5 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus argocd \
-        secrets ghcr helm-lint helm-template apply-argocd render-platform postgres \
+        sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
 # Cores
@@ -100,26 +100,19 @@ ghcr: ## Cria ghcr-secret. Uso: make ghcr NAMESPACES="<projeto>-develop <projeto
 	@if [ -z "$(NAMESPACES)" ]; then echo "$(YELLOW)⚠️  Informe NAMESPACES=\"ns1 ns2\"$(RESET)"; exit 1; fi
 	@./create-ghcr-secrets.sh --namespaces "$(NAMESPACES)" $(if $(TOKEN),--token $(TOKEN),)
 
-secrets: ## (Re)cria o Secret app-secrets. Uso: make secrets PROJECT=<p> ENV=develop
-	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then \
-		echo "$(YELLOW)⚠️  Uso: make secrets PROJECT=<p> ENV=develop$(RESET)"; exit 1; \
-	fi
-	@./scripts/apply-secrets.sh $(PROJECT) $(ENV)
+sealed-secrets: ## Instala o controller do Sealed Secrets + backup/restauração da chave
+	@./scripts/setup-sealed-secrets.sh
 
-postgres: ## Recria o Postgres de um projeto/ambiente. Uso: make postgres PROJECT=<p> ENV=develop [RESET_DATA=1]
+seal: ## Gera os SealedSecrets (commitáveis) de um projeto. Uso: make seal PROJECT=<p> [ENV=<e>]
+	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make seal PROJECT=<p> [ENV=<e>]$(RESET)"; exit 1; fi
+	@./scripts/seal-secrets.sh $(PROJECT) $(ENV)
+
+postgres: ## Recria o Postgres de um projeto/ambiente (dados de lab se perdem). Uso: make postgres PROJECT=<p> ENV=<e>
 	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then \
 		echo "$(YELLOW)⚠️  Uso: make postgres PROJECT=<p> ENV=develop$(RESET)"; exit 1; \
 	fi
-	@if [ "$$(yq -r '.database != null' projects/$(PROJECT)/project.yaml)" != "true" ]; then \
-		echo "$(YELLOW)⚠️  $(PROJECT) não declara database no project.yaml$(RESET)"; exit 1; \
-	fi
-	@USER=$$(yq -r '.database.user // "postgres"' projects/$(PROJECT)/project.yaml); \
-	 PASS=$$(yq -r '.database.password // "postgres"' projects/$(PROJECT)/project.yaml); \
-	 DB=$$(yq -r '.database.defaultDb // "app"' projects/$(PROJECT)/project.yaml); \
-	 EXTRAS=$$(yq -r '.database.extraDbs // [] | join(" ")' projects/$(PROJECT)/project.yaml); \
-	 ARGS="--namespace $(PROJECT)-$(ENV) --user $$USER --password $$PASS --db $$DB --extra-dbs \"$$EXTRAS\""; \
-	 if [ "$(RESET_DATA)" = "1" ]; then ARGS="$$ARGS --reset"; fi; \
-	 eval ./scripts/setup-postgres.sh $$ARGS
+	@./scripts/setup-postgres.sh --namespace $(PROJECT)-$(ENV) --reset \
+		--extra-dbs "$$(yq -r '.database.extraDbs // [] | join(" ")' projects/$(PROJECT)/project.yaml)"
 
 project-apply: ## Prepara UM projeto no cluster (deps, secrets) + /etc/hosts. Uso: make project-apply PROJECT=<p>
 	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make project-apply PROJECT=<nome>$(RESET)"; exit 1; fi

@@ -17,7 +17,8 @@ make apply-argocd | render-platform
 make hosts                         # regrava o bloco do /etc/hosts
 make helm-lint                     # valida todos os values
 make helm-template PROJECT=<p> APP=<a> ENV=<e>
-make secrets  PROJECT=<p> ENV=<e>
+make seal PROJECT=<p> [ENV=<e>]   # secrets/<env>.env → sealed/<env>/ (commitar)
+make sealed-secrets                # controller + backup/restauração da chave
 make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
 make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ```

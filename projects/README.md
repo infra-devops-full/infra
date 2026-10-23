@@ -10,8 +10,9 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 ├── project.yaml                     # dependências: database / redis / rabbitmq
 ├── logo.png                         # logo no dashboard do Grafana (PNG)
 ├── secrets/
-│   ├── example.env                  # valores fictícios de lab (versionado)
-│   └── <env>.env                    # valores reais (gitignored, opcional)
+│   ├── example.env                  # modelo, valores fictícios (versionado)
+│   └── <env>.env                    # valores reais (gitignored)
+├── sealed/<env>/*.yaml              # segredos SELADOS por `make seal` (versionados)
 └── apps/<app>/                      # nome da pasta = nome do app/Service
     ├── values.yaml                  # comum a todos os ambientes
     └── values-<env>.yaml            # um por ambiente; o CI atualiza image.tag
@@ -41,6 +42,7 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 - [ ] `service.port` igual à porta que o container escuta
 - [ ] `apps/<app>/values-<env>.yaml` para cada ambiente, com `image.tag`
 - [ ] `envFrom` com os Secrets das dependências (`postgres`, `redis`, `rabbitmq`, `app-secrets`)
+- [ ] `make seal PROJECT=<projeto>` e `projects/<projeto>/sealed/` commitado (sem senha no `project.yaml`)
 - [ ] `make helm-lint` sem erro
 - [ ] commit e push deste repo, depois `make project-apply PROJECT=<projeto>`
 - [ ] no repo do app: Dockerfile (`templates/`), `.github/workflows/deploy.yml` (com `setup`/`test` de cada app) e `.github/dependabot.yml`

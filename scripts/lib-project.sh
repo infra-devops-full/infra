@@ -100,18 +100,17 @@ project_hosts() {
 project_extra_hosts() { _pq "$1" '.extraHosts // [] | .[]'; }
 
 # --- Dependências ------------------------------------------------------------
+# Senhas NÃO ficam no project.yaml: são geradas e seladas por `make seal`
+# (scripts/seal-secrets.sh). Aqui só o que não é segredo.
 project_db_enabled()  { [[ "$(_pq "$1" '.database != null')" == "true" ]]; }
 project_db_user()     { _pq "$1" '.database.user // "postgres"'; }
-project_db_password() { _pq "$1" '.database.password // "postgres"'; }
 project_db_default()  { _pq "$1" '.database.defaultDb // "app"'; }
 project_db_extras()   { _pq "$1" '.database.extraDbs // [] | join(" ")'; }
 
 project_redis_enabled()  { [[ "$(_pq "$1" '.redis.enabled // false')" == "true" ]]; }
-project_redis_password() { _pq "$1" '.redis.password // ""'; }
 
 project_rabbitmq_enabled()  { [[ "$(_pq "$1" '.rabbitmq.enabled // false')" == "true" ]]; }
 project_rabbitmq_user()     { _pq "$1" '.rabbitmq.user // "guest"'; }
-project_rabbitmq_password() { _pq "$1" '.rabbitmq.password // "guest"'; }
 
 # Repo de infra observado pelo ArgoCD: $INFRA_REPO_URL > git remote origin.
 infra_repo_url() {

@@ -2,52 +2,43 @@
 # =============================================================================
 # setup-redis.sh  (genérico)
 # -----------------------------------------------------------------------------
-# Cria Redis em um namespace:
-#   - Secret redis   (REDIS_URL, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD)
+# Cria Redis em um namespace (com senha):
 #   - Service redis  (6379)
 #   - Deployment redis com emptyDir (volátil — mesmo trade-off do Postgres)
 #
-# As apps consomem a conexão via envFrom: [{ secretRef: redis }].
+# A senha e a conexão ficam no Secret `redis` (REDIS_URL, REDIS_HOST, REDIS_PORT,
+# REDIS_PASSWORD), criado a partir do SealedSecret do projeto (`make seal`).
+# As apps consomem via envFrom: [{ secretRef: redis }].
 #
 # Uso:
-#   ./scripts/setup-redis.sh --namespace <ns> [--password p]
+#   ./scripts/setup-redis.sh --namespace <ns>
 # =============================================================================
 
 set -euo pipefail
 
 NS=""
-REDIS_PASS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --namespace) NS="$2"; shift 2 ;;
-    --password)  REDIS_PASS="$2"; shift 2 ;;
     *) echo "Argumento desconhecido: $1"; exit 1 ;;
   esac
 done
 
 if [[ -z "$NS" ]]; then
-  echo "Uso: $0 --namespace <ns> [--password p]"
+  echo "Uso: $0 --namespace <ns>"
   exit 1
 fi
 
 kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
+kubectl get secret redis -n "$NS" >/dev/null 2>&1 || {
+  echo "❌ Secret redis não existe em $NS — rode \`make seal PROJECT=<p>\` e \`make project-apply PROJECT=<p>\`"
+  exit 1
+}
 
-HOST="redis.${NS}.svc.cluster.local"
-if [[ -n "$REDIS_PASS" ]]; then
-  URL="redis://default:${REDIS_PASS}@${HOST}:6379"
-  ARGS='["redis-server", "--requirepass", "$(REDIS_PASSWORD)"]'
-else
-  URL="redis://${HOST}:6379"
-  ARGS='["redis-server"]'
-fi
-
-kubectl -n "$NS" create secret generic redis \
-  --from-literal=REDIS_URL="$URL" \
-  --from-literal=REDIS_HOST="$HOST" \
-  --from-literal=REDIS_PORT="6379" \
-  --from-literal=REDIS_PASSWORD="$REDIS_PASS" \
-  --dry-run=client -o yaml | kubectl apply -f -
+# Hash do Secret no template do pod: se a senha mudar (make seal), o
+# Deployment muda e o Kubernetes recria o pod com a credencial nova.
+SECRET_SUM="$(kubectl get secret redis -n "$NS" -o jsonpath='{.data}' | shasum -a 256 | cut -c1-16)"
 
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -86,11 +77,15 @@ spec:
     metadata:
       labels:
         app: redis
+      annotations:
+        devops-platform/secret-checksum: "${SECRET_SUM}"
     spec:
       containers:
         - name: redis
           image: redis:7-alpine
-          command: ${ARGS}
+          # Senha do Secret selado (REDIS_PASSWORD), expandida pelo Kubernetes
+          # (o \$ escapa o bash: quem resolve o \$(VAR) é o kubelet).
+          command: ["redis-server", "--requirepass", "\$(REDIS_PASSWORD)"]
           env:
             - name: REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: redis, key: REDIS_PASSWORD } }

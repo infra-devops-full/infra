@@ -51,7 +51,7 @@ source "$SCRIPT_DIR/lib-project.sh"
 
 # --- Ferramentas -------------------------------------------------------------
 section "Ferramentas"
-for bin in docker k3d kubectl helm yq envsubst; do
+for bin in docker k3d kubectl helm yq envsubst kubeseal; do
   if command -v "$bin" >/dev/null 2>&1; then ok "$bin"; else err "$bin não encontrado"; hint "brew install $bin"; fi
 done
 if command -v gh >/dev/null 2>&1; then
@@ -144,10 +144,38 @@ for P in $PROJS; do
         grep -nE '^[A-Za-z_][A-Za-z0-9_]*="' "$SD/$E.env" >/dev/null && \
           warn "$P: secrets/$E.env tem valores entre aspas — o kubectl grava as aspas junto"
       else
-        ok "$P: secrets/$E.env ausente → usa example.env (valores de lab)"
+        ok "$P: secrets/$E.env ausente (o \`make seal\` cria a partir do example.env)"
       fi
     done
   fi
+done
+
+# --- Segredos (Sealed Secrets) -------------------------------------------------
+section "Segredos (Sealed Secrets)"
+CERT="$INFRA_ROOT/config/sealed-secrets/cert.pem"
+KEYS="$(eval echo "${SEALED_KEYS_DIR:-$HOME/.config/devops-platform/sealed-secrets}")/keys.yaml"
+if [[ -f "$CERT" ]]; then ok "chave pública: config/sealed-secrets/cert.pem"
+else err "config/sealed-secrets/cert.pem não existe"; hint "make sealed-secrets (com o cluster no ar)"; fi
+if [[ -f "$KEYS" ]]; then ok "backup da chave privada: $KEYS"
+else warn "sem backup da chave privada — sem ele, um cluster novo não abre os segredos do Git"; hint "make sealed-secrets"; fi
+if kubectl get deploy -n kube-system sealed-secrets-controller >/dev/null 2>&1 && [[ -f "$CERT" ]]; then
+  if [[ "$(kubeseal --controller-name sealed-secrets-controller --controller-namespace kube-system --fetch-cert 2>/dev/null)" == "$(cat "$CERT")" ]]; then
+    ok "a chave do cluster é a mesma do cert.pem commitado"
+  else
+    err "a chave do cluster é DIFERENTE do cert.pem — os SealedSecrets do Git não abrem"; hint "restaure a chave (make sealed-secrets) ou sele de novo (make seal PROJECT=<p>)"
+  fi
+fi
+for P in $PROJS; do
+  grep -qE '^[[:space:]]+password:' "$(project_manifest "$P")" && \
+    { err "$P: project.yaml tem senha em texto puro — remova (as senhas vão em secrets/<env>.env + make seal)"; }
+  NEEDS=false
+  { project_db_enabled "$P" || project_redis_enabled "$P" || project_rabbitmq_enabled "$P" || [[ -f "$(project_dir "$P")/secrets/example.env" ]]; } && NEEDS=true
+  $NEEDS || continue
+  for E in $(project_envs "$P"); do
+    D="$(project_dir "$P")/sealed/$E"
+    if [[ -n "$(ls "$D"/*.yaml 2>/dev/null)" ]]; then ok "$P/$E: $(ls "$D"/*.yaml | xargs -n1 basename | sed 's/.yaml//' | xargs)"
+    else err "$P/$E: sem SealedSecrets em sealed/$E/"; hint "make seal PROJECT=$P && git add projects/$P/sealed"; fi
+  done
 done
 
 # --- GitHub ------------------------------------------------------------------

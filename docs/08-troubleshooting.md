@@ -51,6 +51,15 @@ treinar o diagnóstico, veja [11-treino-quebre-e-conserte.md](11-treino-quebre-e
 | tabelas sumiram | Postgres com `emptyDir` foi recriado | `make rollout SERVICE=<api> NAMESPACE=<ns>` para as migrations rodarem de novo |
 | erro de compilação MapStruct `Unmapped target property: "withX"` | método `withX(...)` no record é lido como setter fluente | `@Mapping(target = "withX", ignore = true)` |
 
+## Segredos (Sealed Secrets)
+
+| Sintoma | Causa | Solução |
+| ------- | ----- | ------- |
+| `no key could decrypt secret` / `ErrUnsealFailed` | selado para outro namespace ou nome, ou o cluster tem outra chave | `make doctor`; selar para o destino certo, ou restaurar a chave (`make sealed-secrets`) |
+| `already exists and is not managed by SealedSecret` | Secret antigo criado à mão | `make project-apply` adota (anotação `managed=true`) |
+| `password authentication failed` por 1 a 2 min após rotacionar | pods antigos do app (rolling update) com a senha velha | esperado; para quando eles terminam |
+| app usa a senha antiga | env é lido só na subida | `make rollout SERVICE=<app> NAMESPACE=<ns>` |
+
 ## Helm e ArgoCD
 
 | Sintoma | Causa | Solução |

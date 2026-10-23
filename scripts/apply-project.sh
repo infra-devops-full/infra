@@ -5,12 +5,16 @@
 # Prepara no cluster o que o ArgoCD NÃO cria para um projeto. Idempotente.
 #
 #   1. namespaces <projeto>-<env>     (um por values-<env>.yaml encontrado)
-#   2. dependências declaradas no project.yaml: Postgres, Redis, RabbitMQ
-#   3. ghcr-secret                    (se GITHUB_TOKEN disponível)
-#   4. Secret app-secrets             (projects/<p>/secrets/<env>.env)
+#   2. SealedSecrets do projeto       (projects/<p>/sealed/<env>/, gerados por
+#                                      `make seal`) → o controller cria os
+#                                      Secrets postgres/rabbitmq/redis/app-secrets
+#   3. dependências declaradas no project.yaml: Postgres, Redis, RabbitMQ
+#      (leem as credenciais dos Secrets do passo 2)
+#   4. ghcr-secret                    (se GITHUB_TOKEN disponível)
 #
-# Os apps em si são criados pelo ApplicationSet genérico (argocd/) assim que
-# os arquivos do projeto estão no Git. O /etc/hosts é atualizado à parte:
+# Os apps e os SealedSecrets também são reconciliados pelo ArgoCD a partir do
+# Git (argocd/applicationset*.yaml); aplicar os SealedSecrets aqui garante que
+# os Secrets existam antes de subir as dependências. O /etc/hosts é atualizado à parte:
 # ./scripts/hosts.sh apply
 #
 # Uso:
@@ -56,30 +60,54 @@ for NS in $NAMESPACES; do
   kubectl label namespace "$NS" devops-platform/project="$PROJ" --overwrite >/dev/null
 done
 
-# 2. Dependências -------------------------------------------------------------
+# 2. SealedSecrets ------------------------------------------------------------
+for ENV_NAME in $ENVS; do
+  SDIR="$(project_dir "$PROJ")/sealed/$ENV_NAME"
+  if [[ ! -d "$SDIR" ]] || [[ -z "$(ls "$SDIR"/*.yaml 2>/dev/null)" ]]; then
+    if project_db_enabled "$PROJ" || project_redis_enabled "$PROJ" || project_rabbitmq_enabled "$PROJ"; then
+      echo "❌ projects/$PROJ/sealed/$ENV_NAME/ não existe — rode \`make seal PROJECT=$PROJ\` e commite"
+      exit 1
+    fi
+    continue
+  fi
+  step "SealedSecrets ($ENV_NAME)"
+  # Secrets criados no modelo antigo (sem dono) não são sobrescritos pelo
+  # controller; a anotação managed=true autoriza a adoção.
+  for f in "$SDIR"/*.yaml; do
+    NAME="$(yq -r '.metadata.name' "$f")"
+    if kubectl get secret "$NAME" -n "${PROJ}-${ENV_NAME}" >/dev/null 2>&1 && \
+       [[ -z "$(kubectl get secret "$NAME" -n "${PROJ}-${ENV_NAME}" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}')" ]]; then
+      kubectl annotate secret "$NAME" -n "${PROJ}-${ENV_NAME}" sealedsecrets.bitnami.com/managed=true --overwrite >/dev/null
+    fi
+  done
+  kubectl apply -f "$SDIR" >/dev/null
+  # Espera o controller abrir cada SealedSecret no Secret correspondente.
+  for f in "$SDIR"/*.yaml; do
+    NAME="$(yq -r '.metadata.name' "$f")"
+    owned() { [[ -n "$(kubectl get secret "$NAME" -n "${PROJ}-${ENV_NAME}" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null)" ]]; }
+    for _ in $(seq 1 30); do owned && break; sleep 2; done
+    owned || { echo "❌ o controller não abriu $NAME em ${PROJ}-${ENV_NAME} (chave diferente? veja make doctor e kubectl describe sealedsecret $NAME -n ${PROJ}-${ENV_NAME})"; exit 1; }
+  done
+done
+
+# 3. Dependências -------------------------------------------------------------
 for NS in $NAMESPACES; do
   if project_db_enabled "$PROJ"; then
     step "Postgres em $NS"
     bash "$SCRIPT_DIR/setup-postgres.sh" --namespace "$NS" \
-      --user "$(project_db_user "$PROJ")" \
-      --password "$(project_db_password "$PROJ")" \
-      --db "$(project_db_default "$PROJ")" \
       --extra-dbs "$(project_db_extras "$PROJ")"
   fi
   if project_redis_enabled "$PROJ"; then
     step "Redis em $NS"
-    bash "$SCRIPT_DIR/setup-redis.sh" --namespace "$NS" \
-      --password "$(project_redis_password "$PROJ")"
+    bash "$SCRIPT_DIR/setup-redis.sh" --namespace "$NS"
   fi
   if project_rabbitmq_enabled "$PROJ"; then
     step "RabbitMQ em $NS"
-    bash "$SCRIPT_DIR/setup-rabbitmq.sh" --namespace "$NS" \
-      --user "$(project_rabbitmq_user "$PROJ")" \
-      --password "$(project_rabbitmq_password "$PROJ")"
+    bash "$SCRIPT_DIR/setup-rabbitmq.sh" --namespace "$NS"
   fi
 done
 
-# 3. ghcr-secret --------------------------------------------------------------
+# 4. ghcr-secret --------------------------------------------------------------
 if [[ -n "${GITHUB_TOKEN:-}" && "${GITHUB_TOKEN}" != ghp_your_github_token_here ]]; then
   step "ghcr-secret"
   bash "$INFRA_ROOT/create-ghcr-secrets.sh" --namespaces "$NAMESPACES" >/dev/null || \
@@ -88,11 +116,5 @@ else
   echo -e "  ${YELLOW}⚠️  GITHUB_TOKEN ausente: imagens privadas do GHCR não vão baixar.${NC}"
   echo -e "     make ghcr NAMESPACES=\"$NAMESPACES\" TOKEN=<token>"
 fi
-
-# 4. Secrets das apps ---------------------------------------------------------
-for ENV_NAME in $ENVS; do
-  step "app-secrets ($ENV_NAME)"
-  bash "$SCRIPT_DIR/apply-secrets.sh" "$PROJ" "$ENV_NAME"
-done
 
 echo -e "${GREEN}✅ Projeto '$PROJ' preparado — o ArgoCD cria os apps a partir do Git${NC}"

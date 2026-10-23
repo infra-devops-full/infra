@@ -275,6 +275,10 @@ bash "$SCRIPT_DIR/scripts/setup-observability.sh"
 # ==============================================================================
 log_step "ETAPA 5/7: Projetos e ArgoCD"
 
+# Sealed Secrets antes dos projetos: as dependências (Postgres, Redis,
+# RabbitMQ) leem as credenciais dos Secrets que o controller abre.
+bash "$SCRIPT_DIR/scripts/setup-sealed-secrets.sh"
+
 # Primeiro o que o ArgoCD não cria (secrets/dependências), depois o
 # ApplicationSet — assim os pods já nascem com os Secrets disponíveis.
 for PROJ in $(project_names); do

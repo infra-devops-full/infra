@@ -163,7 +163,7 @@ variáveis (`envFrom`).
 - Diferente do exercício 1, aqui o pod antigo foi apagado, então **não sobrou
   ninguém servindo**: 503.
 - **Conserto:** recriar o Secret (`make lab-up`). Nos projetos, é o
-  `make project-apply PROJECT=<p>` ou `make secrets PROJECT=<p> ENV=<e>`.
+  `make project-apply PROJECT=<p>` (os Secrets vêm dos SealedSecrets do Git).
 - Se o Secret for opcional, o chart aceita `optional: true` no `envFrom`.
 </details>
 
@@ -438,6 +438,45 @@ sempre ganha.
 
 O check `ci` é o que a proteção da `main` exige. Com ele, código que quebra
 teste **não chega em produção**, e a falha aparece no PR, não no cluster.
+</details>
+
+---
+
+## Exercício 15: o segredo que não abre
+
+Simule o erro clássico "copiei o arquivo selado de develop para outro
+lugar":
+
+```bash
+yq '.metadata.namespace = "treino"' projects/nest-rabbitmq/sealed/develop/rabbitmq.yaml \
+  | kubectl apply -f -
+kubectl get sealedsecret,secret -n treino
+```
+
+**Sintoma observado:** o `SealedSecret` existe, mas o `Secret` `rabbitmq`
+**não** é criado. Evento `ErrUnsealFailed`.
+
+<details><summary>Dica</summary>
+
+```bash
+kubectl describe sealedsecret rabbitmq -n treino     # Status / Events
+```
+A chave do cluster é a certa (o mesmo arquivo abre em `nest-rabbitmq-develop`).
+O que mudou?
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+- `Synced=False: no key could decrypt secret (...)`: um SealedSecret é selado
+  para **um nome e um namespace**. Em outro namespace ele não abre, mesmo com
+  a chave certa. Isso impede que alguém com acesso a um namespace "leve" o
+  segredo de outro.
+- A mesma mensagem aparece quando o cluster tem **outra chave** (cluster
+  recriado sem o backup). O `make doctor` distingue os dois casos (compara a
+  chave do cluster com o `cert.pem`).
+- **Conserto:** selar para o destino certo (`make seal PROJECT=<p> ENV=<e>`) e
+  limpar: `kubectl delete sealedsecret rabbitmq -n treino`.
+- Mais em [12-segredos.md](12-segredos.md).
 </details>
 
 ---

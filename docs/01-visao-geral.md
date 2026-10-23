@@ -18,7 +18,7 @@ repositório.
 | Visualização | **Grafana** | dashboard *Platform / Apps* |
 | CI | **GitHub Actions** | testes, build, scan e publicação de imagem |
 | Registry | **GHCR** | imagens `ghcr.io/<owner>/<repo>/<app>` |
-| Segurança | **Trivy**, **CodeQL**, **Dependabot** | CVEs, análise de código, atualização de dependências |
+| Segurança | **Trivy**, **CodeQL**, **Dependabot**, **Sealed Secrets** | CVEs, análise de código, dependências, segredos criptografados no Git |
 
 ## Os dois mundos do repositório
 
@@ -69,7 +69,8 @@ Pontos importantes:
 namespace wlstore-develop
 ├── Deployment/Service/Ingress de cada app   ← ArgoCD (charts/app)
 ├── postgres, rabbitmq, redis                ← plataforma (apply-project.sh)
-└── Secrets: postgres, rabbitmq, redis, app-secrets, ghcr-secret
+└── Secrets: postgres, rabbitmq, redis, app-secrets  ← SealedSecrets do Git (make seal)
+            ghcr-secret (opcional)
 ```
 
 Os apps leem as conexões dos Secrets via `envFrom`. Veja
@@ -89,7 +90,7 @@ Os apps leem as conexões dos Secrets via `envFrom`. Veja
 | Aqui | Em produção |
 | ---- | ----------- |
 | Postgres/Redis/RabbitMQ com `emptyDir` (dados voláteis) | banco gerenciado (RDS, Cloud SQL) ou operador com backup |
-| Senhas em `project.yaml` e `example.env` | Sealed Secrets, External Secrets ou Vault (fase 2 do roteiro) |
+| Sealed Secrets com a chave num arquivo local de backup | External Secrets + Vault/Secrets Manager; chave em cofre/HSM |
 | HTTP sem TLS, domínios `.local` | cert-manager + Let's Encrypt, DNS real |
 | develop e prod no mesmo cluster | clusters separados |
 | sem alertas (só dashboards) | Alertmanager com Slack/PagerDuty e SLOs |
