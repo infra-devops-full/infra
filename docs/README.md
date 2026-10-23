@@ -1,25 +1,31 @@
 # Documentação
 
-O guia atual da plataforma (setup, adicionar projeto, testar deploy, promover
-para prod) está no **[README principal](../README.md)**. A convenção de
-projetos está em [`projects/README.md`](../projects/README.md).
+O [README principal](../README.md) é o guia rápido: instalar, adicionar
+projeto, testar o deploy. Aqui está o **como funciona** de cada parte, mais o
+material de estudo e treino.
 
-## Documentos históricos
+## Referência
 
-Os arquivos abaixo descrevem a **versão anterior** da infra, com chart e
-ArgoCD específicos do crivo (Keycloak, Kong, Konga) e caminhos como
-`helm/crivo-app`, `argocd/applicationsets/` e `config/secrets.*`. Essa
-estrutura foi substituída pelo chart genérico (`charts/app`), pelo
-ApplicationSet genérico (`argocd/`) e por `projects/<nome>/`. Eles ficam aqui
-como referência de conceitos (k3d, ArgoCD, multi-ambiente, troubleshooting),
-não como instrução.
+| Doc | Conteúdo |
+| --- | -------- |
+| [01-visao-geral.md](01-visao-geral.md) | o que é a plataforma, componentes, caminho de uma mudança até prod, domínios, limites do lab |
+| [02-instalacao.md](02-instalacao.md) | pré-requisitos, etapas do `make setup`, `.env`, operação do dia a dia |
+| [03-projetos.md](03-projetos.md) | anatomia de um projeto, `project.yaml`, Secrets da plataforma, values, como adicionar projeto/app/ambiente/microfrontend |
+| [04-gitops-argocd.md](04-gitops-argocd.md) | GitOps, o ApplicationSet genérico, sync, selfHeal, rollback pelo Git |
+| [05-ci-cd.md](05-ci-cd.md) | branches e ambientes, pipeline (plan → test → build → deploy → ci), `APPS_JSON`, Dockerfiles, Trivy, CodeQL, Dependabot |
+| [06-observabilidade.md](06-observabilidade.md) | dashboard *Platform / Apps*, PromQL e LogQL úteis, componentes |
+| [07-scripts.md](07-scripts.md) | o que cada script e cada comando do Makefile faz, e como se encadeiam |
+| [08-troubleshooting.md](08-troubleshooting.md) | problemas reais que já aconteceram, com causa e solução |
+| [09-cheatsheet.md](09-cheatsheet.md) | comandos `make`, `kubectl` e `git` do dia a dia |
 
-- [01-installation.md](01-installation.md) – pré-requisitos e instalação
-- [02-architecture.md](02-architecture.md) – arquitetura e decisões
-- [04-argocd.md](04-argocd.md) – AppProjects e ApplicationSets
-- [05-applications.md](05-applications.md) – modelagem antiga das apps do crivo
-- [06-keycloak.md](06-keycloak.md) – Keycloak (stack antiga do crivo)
-- [07-environments.md](07-environments.md) – multi-ambiente
-- [08-troubleshooting.md](08-troubleshooting.md) – problemas comuns
-- [09-cheatsheet.md](09-cheatsheet.md) – comandos úteis
-- [10-kong.md](10-kong.md) – Kong / API Gateway (stack antiga do crivo)
+## Estudo e treino
+
+| Doc | Conteúdo |
+| --- | -------- |
+| [10-roteiro-de-estudo.md](10-roteiro-de-estudo.md) | o que estudar e em que ordem, hábitos de operação, roteiro de evolução da plataforma |
+| [11-treino-quebre-e-conserte.md](11-treino-quebre-e-conserte.md) | **14 exercícios práticos** num laboratório isolado (`make lab-up`), com sintomas reais, dicas, soluções e o conceito por trás |
+
+## Histórico
+
+[`legacy/`](legacy/README.md): a documentação da primeira versão (stack com
+Keycloak, Kong e chart próprio do crivo), mantida só como referência.

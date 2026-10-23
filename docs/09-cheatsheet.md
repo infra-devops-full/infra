@@ -1,105 +1,91 @@
 # Cheatsheet
 
-## Make targets
+`SERVICE` = nome do app (pasta em `apps/`). `NAMESPACE` = `<projeto>-<env>`.
 
-```
-make setup                                # setup completo da infra (1x)
-make secrets ENV=develop                  # aplica/atualiza Secrets de um ambiente
-make apply-argocd                         # reaplica AppProjects + ApplicationSet
-make helm-lint                            # lint do chart contra todos os values
-make helm-template APP=crivo-be ENV=develop   # renderiza pra inspecionar
-
-make logs SERVICE=crivo-be NAMESPACE=crivo-develop
-make status
-make argocd grafana prometheus            # abre as UIs
-
-make start | stop | restart | destroy
-```
-
-## kubectl
+## Plataforma
 
 ```bash
-# Listar apps gerenciadas
-kubectl get app -n argocd
-
-# Force-sync uma app
-kubectl annotate app crivo-be-develop -n argocd \
-  argocd.argoproj.io/refresh=hard --overwrite
-
-# Reiniciar todos os pods de uma app
-kubectl rollout restart deploy/crivo-be -n crivo-develop
-
-# Ver logs de uma init container falhando
-kubectl logs <pod> -n <ns> -c <init-container-name>
-
-# Port-forward pro Postgres local
-kubectl port-forward -n crivo-develop svc/postgres 5432:5432
-
-# Exec dentro do Postgres
-kubectl exec -it -n crivo-develop deploy/postgres -- \
-  psql -U crivo -d crivo_app
+make help                          # todos os comandos
+make doctor                        # confere tudo (não altera nada)
+make setup | status | destroy
+make start | stop | restart
+make projects                      # projetos, apps e ambientes descobertos
+make project-apply PROJECT=<p>     # namespaces, dependências, secrets, hosts
+make github [PROJECT=<p>] [ARGS=--dry-run|--rotate|--no-protect]
+make observability                 # métricas do ingress, Loki, Alloy, dashboard
+make apply-argocd | render-platform
+make hosts                         # regrava o bloco do /etc/hosts
+make helm-lint                     # valida todos os values
+make helm-template PROJECT=<p> APP=<a> ENV=<e>
+make secrets  PROJECT=<p> ENV=<e>
+make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
+make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ```
 
-## Helm
+## Dia a dia
 
 ```bash
-# Renderizar uma combinação app/env sem aplicar
-helm template crivo-be helm/crivo-app \
-  -f helm/crivo-app/apps/crivo-be/values.yaml \
-  -f helm/crivo-app/apps/crivo-be/values-develop.yaml
-
-# Lint
-helm lint helm/crivo-app \
-  -f helm/crivo-app/apps/crivo-be/values.yaml \
-  -f helm/crivo-app/apps/crivo-be/values-develop.yaml
+make pods [NAMESPACE=<ns>]         # pods dos projetos
+make apps                          # Applications (sync/health)
+make logs     SERVICE=<a> NAMESPACE=<ns>
+make describe SERVICE=<a> NAMESPACE=<ns>
+make events   NAMESPACE=<ns>
+make rollout  SERVICE=<a> NAMESPACE=<ns>     # reinicia (relê env e secrets)
+make shell    SERVICE=<a> NAMESPACE=<ns>
+make pf SERVICE=postgres NAMESPACE=<ns> PORT=5432 LOCAL=5433
+make refresh [APP=<application>]   # ArgoCD relê o Git
 ```
 
-## ArgoCD CLI (opcional)
+## kubectl essencial
 
 ```bash
-# Login
-argocd login argocd.devops.local
-
-# Listar apps
-argocd app list
-
-# Sync com detalhes
-argocd app sync crivo-be-develop --prune
-
-# Ver diff entre git e cluster
-argocd app diff crivo-be-develop
+kubectl config current-context                       # k3d-devops-lab
+kubectl get pods -n <ns> -o wide
+kubectl get all -n <ns>
+kubectl describe pod <pod> -n <ns>                   # leia os Events no fim
+kubectl logs deploy/<app> -n <ns> -f --tail=100
+kubectl logs <pod> -n <ns> --previous                # o container que morreu
+kubectl get events -n <ns> --sort-by=.lastTimestamp
+kubectl get endpoints <svc> -n <ns>                  # o Service acha pods?
+kubectl get ingress -A                               # hosts publicados
+kubectl rollout status|history|undo deploy/<app> -n <ns>
+kubectl exec -it deploy/<app> -n <ns> -- sh
+kubectl get secret <s> -n <ns> -o json | jq -r '.data | map_values(@base64d)'
+kubectl get deploy -n <ns> -o custom-columns='APP:.metadata.name,IMAGE:.spec.template.spec.containers[0].image'
+kubectl run tmp --rm -it --image=curlimages/curl -n <ns> -- sh      # testar de dentro do cluster
+kubectl top pods -n <ns>                             # (metrics-server desligado: use o Grafana)
 ```
 
-## Postgres
+## Git do repo de infra
 
 ```bash
-# Listar bancos
-kubectl exec -n crivo-develop deploy/postgres -- psql -U crivo -l
-
-# Conectar local via port-forward
-kubectl port-forward -n crivo-develop svc/postgres 5432:5432 &
-psql postgresql://crivo:crivo_password@127.0.0.1:5432/crivo_app
-
-# Rodar migrations (de fora)
-cd ~/Development/fullstack/crivo/apps/crivo-be
-DATABASE_URL='postgresql://crivo:crivo_password@127.0.0.1:5432/crivo_app?schema=public' \
-  npx prisma migrate deploy
+git config pull.rebase true          # o CI também commita na main
+git pull && git push
+git log --oneline -- projects/<p>/apps/<a>/values-prod.yaml   # histórico de deploys
+git revert <commit-de-deploy> && git push                     # rollback
 ```
 
-## /etc/hosts esperado
+## Promover uma tag manualmente
 
+```bash
+TAG=$(yq '.image.tag' projects/<p>/apps/<a>/values-develop.yaml)
+yq -i ".image.tag = \"$TAG\"" projects/<p>/apps/<a>/values-prod.yaml
+git commit -am "deploy(<p>/prod): <a> → $TAG" && git push
 ```
-# DevOps Lab - Ferramentas
-127.0.0.1 argocd.devops.local
-127.0.0.1 grafana.devops.local
-127.0.0.1 prometheus.devops.local
-127.0.0.1 alertmanager.devops.local
-# Crivo - Apps (develop)
-127.0.0.1 develop.auth.crivo.local
-127.0.0.1 develop.be.crivo.local
-127.0.0.1 develop.fe.crivo.local
-# Crivo - Apps (prod)
-127.0.0.1 prod.auth.crivo.local
-127.0.0.1 prod.be.crivo.local
-127.0.0.1 prod.fe.crivo.local
+
+## Laboratório
+
+```bash
+make lab-up | lab-status | lab-down
+curl --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/
 ```
+
+## URLs
+
+| | |
+| - | - |
+| ArgoCD | http://argocd.devops.local (admin / senha no `make status`) |
+| Grafana | http://grafana.devops.local (admin / `devops.local2026`) |
+| Prometheus | http://prometheus.devops.local |
+| crivo | http://develop.crivo.local · http://crivo.local |
+| wlstore | http://develop.wlstore.local · http://wlstore.local |

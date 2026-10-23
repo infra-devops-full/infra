@@ -4,6 +4,11 @@ Plataforma **genérica** de Kubernetes local com GitOps. Um cluster k3d com
 NGINX Ingress, ArgoCD, Prometheus e Grafana. Cada aplicação entra como um
 **projeto** em `projects/<nome>/` com o mínimo de arquivos.
 
+> 📚 **Documentação detalhada e treino:** [`docs/`](docs/README.md). Lá estão a
+> arquitetura, GitOps, CI/CD, observabilidade, o mapa dos scripts,
+> troubleshooting, roteiro de estudo e **14 exercícios de "quebre e conserte"**
+> num laboratório isolado (`make lab-up`).
+
 Tudo fora de `projects/` é genérico e não cita nenhuma aplicação:
 
 | Pasta | O que é |
@@ -456,6 +461,7 @@ revisão certa:
 
 ```bash
 make help                 # todos os comandos
+make lab-up | lab-status | lab-down   # laboratório de treino (docs/11-treino-quebre-e-conserte.md)
 make doctor               # confere tokens, variáveis, GitHub e Docker
 make github [PROJECT=<p>] [ARGS=--dry-run|--rotate]  # configura o GitHub dos apps
 make setup | status | destroy
@@ -554,7 +560,8 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── github-bootstrap.sh       # develop + deploy key + proteção da main nos apps
 │   └── 99-show-urls.sh
 ├── create-ghcr-secrets.sh
-├── templates/                    # nestjs/, nextjs/, nx-nextjs/, spring-maven/, github/deploy.yml
+├── templates/                    # nestjs/, nextjs/, nx-nextjs/, spring-maven/, github/{deploy,dependabot}.yml
+├── docs/                         # documentação por tema, treino (labs/) e histórico (legacy/)
 └── projects/
     ├── crivo/
     └── nest-rabbitmq/

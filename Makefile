@@ -1,6 +1,6 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus argocd \
         secrets ghcr helm-lint helm-template apply-argocd render-platform postgres \
-        projects project-apply doctor github observability hosts pods apps describe events rollout shell pf refresh
+        projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
 # Cores
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -164,6 +164,30 @@ helm-template: ## Renderiza um app. Uso: make helm-template PROJECT=<p> APP=<app
 		-f projects/$(PROJECT)/apps/$(APP)/values.yaml \
 		-f projects/$(PROJECT)/apps/$(APP)/values-$(ENV).yaml \
 		--set app.name=$(APP),app.environment=$(ENV),app.project=$(PROJECT)
+
+# --- Laboratório de treino (docs/11-treino-quebre-e-conserte.md) ------------
+LAB_NS := treino
+
+lab-up: ## Treino: instala/restaura o app demo no namespace treino (fora do ArgoCD)
+	@kubectl create namespace $(LAB_NS) --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+	@kubectl -n $(LAB_NS) create secret generic demo-config --from-literal=GREETING=ola \
+		--dry-run=client -o yaml | kubectl apply -f - >/dev/null
+	@# --force-conflicts: o Helm 4 usa server-side apply e recusa sobrescrever campos
+	@# que o `kubectl patch/set` "tomou para si". No lab queremos sempre restaurar.
+	@helm upgrade --install demo charts/app -n $(LAB_NS) -f docs/labs/demo-values.yaml \
+		--set app.name=demo,app.environment=treino,app.project=lab \
+		--force-conflicts --wait --timeout 3m >/dev/null
+	@echo "$(GREEN)✅ demo no ar:$(RESET) curl --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local"
+
+lab-status: ## Treino: pods, eventos e resposta HTTP do app demo
+	@kubectl get deploy,pods,svc,endpoints,ingress -n $(LAB_NS) 2>/dev/null
+	@echo; kubectl get events -n $(LAB_NS) --sort-by=.lastTimestamp 2>/dev/null | tail -6
+	@echo; printf "HTTP: "; curl -s -o /dev/null -w "%{http_code}\n" --max-time 5 \
+		--resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/ || true
+
+lab-down: ## Treino: remove o laboratório (namespace treino)
+	@kubectl delete namespace $(LAB_NS) --ignore-not-found --wait=false
+	@echo "$(YELLOW)namespace $(LAB_NS) removido$(RESET)"
 
 k9s: ## Abre k9s
 	@k9s

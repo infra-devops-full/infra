@@ -1,0 +1,44 @@
+# =============================================================================
+# App "demo" do laboratório de treino (docs/11-treino-quebre-e-conserte.md).
+#
+# Instalado com o MESMO chart genérico dos projetos (charts/app), mas por Helm
+# e FORA do ArgoCD, no namespace `treino`. Assim dá para quebrar com kubectl
+# sem o selfHeal do ArgoCD desfazer na hora.
+#
+#   make lab-up     instala / restaura o estado correto
+#   make lab-down   remove o namespace treino
+# =============================================================================
+image:
+  # Imagem pública e multi-arch do projeto nest-rabbitmq (NestJS, porta 3000).
+  repository: ghcr.io/geraldobl58/microservice-with-nestjs-rabbitmq/products
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  port: 3000
+
+ingress:
+  host: demo.treino.local
+
+livenessProbe:
+  path: /
+readinessProbe:
+  path: /
+  initialDelaySeconds: 5
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 192Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+env:
+  PORT: "3000"
+
+# Secret criado pelo `make lab-up` (usado no exercício de Secret ausente).
+envFrom:
+  - secretRef: demo-config
