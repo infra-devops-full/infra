@@ -1,3 +1,3 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 image:
-  tag: sha-7a62738
+  tag: sha-efa7474
