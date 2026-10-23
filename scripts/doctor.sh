@@ -174,7 +174,16 @@ else
         || warn "$R: workflow deploy.yml ausente em $B"
     done
     [[ $PROBLEMS -eq 0 ]] && ok "$R: develop + INFRA_DEPLOY_KEY + deploy key"
-    [[ $PROBLEMS -eq 1 ]] && hint "make github PROJECT=$P"
+    # Qualidade e segurança (avisos: o deploy funciona sem, mas sem proteção).
+    SEC=0
+    gh api "repos/$R/branches/main/protection" --jq '.required_status_checks.contexts[]?' 2>/dev/null | grep -qx ci \
+      || { warn "$R: main não exige o check \`ci\` (PR com teste falhando pode ser mergeado)"; SEC=1; }
+    [[ "$(gh api "repos/$R/code-scanning/default-setup" --jq .state 2>/dev/null)" == "configured" ]] \
+      || { warn "$R: CodeQL não configurado"; SEC=1; }
+    gh api "repos/$R/vulnerability-alerts" >/dev/null 2>&1 \
+      || { warn "$R: alertas do Dependabot desligados"; SEC=1; }
+    [[ $SEC -eq 0 ]] && ok "$R: check ci obrigatório + CodeQL + Dependabot"
+    [[ $PROBLEMS -eq 1 || $SEC -eq 1 ]] && hint "make github PROJECT=$P"
   done
 fi
 

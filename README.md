@@ -168,7 +168,9 @@ Campos do `deploy.yml` de cada app (não são secrets):
 | ----- | --------------- |
 | `INFRA_REPO` | `infra-devops-full/infra` |
 | `INFRA_PROJECT` | `crivo` |
-| `APPS_JSON` (job `plan`) | um item por app: `app`, `context`, `dockerfile`, `build-args`, `paths` |
+| `APPS_JSON` (job `plan`) | um item por app: `app`, `context`, `dockerfile`, `build-args`, `paths`, `setup`, `test` |
+| `setup` | toolchain dos testes: `node`, `pnpm`, `java` ou `""` |
+| `test` | comando de lint + testes, rodado na raiz do repo (ex.: `cd crivo-be && npm ci && npx eslint ... && npx jest --ci`) |
 | `build-args` | `NEXT_PUBLIC_API_URL=http://crivo-be:8080` (várias: separe com `\n`) |
 | `paths` | prefixos que, se alterados, rebuildam o app (inclua libs compartilhadas) |
 | `DEPLOY_ENV` | calculado: `develop` na branch develop, `prod` na main |
@@ -314,13 +316,19 @@ Também vale `extraHosts: [...]` no `project.yaml`, para hosts extras no
 | [`templates/nextjs/`](templates/nextjs) | Dockerfile e `.dockerignore` de um app Next.js (npm) |
 | [`templates/nx-nextjs/`](templates/nx-nextjs) | monorepo Nx + pnpm com vários apps Next.js: um Dockerfile, o app vem de `--build-arg APP=` (variáveis de build em `BUILD_ENV`) |
 | [`templates/spring-maven/`](templates/spring-maven) | multi-módulo Maven com vários serviços Spring Boot: um Dockerfile, o serviço vem de `--build-arg SERVICE=`. O Maven roda nativo no build multi-arch |
-| [`templates/github/deploy.yml`](templates/github/deploy.yml) | CI: build, push no GHCR e commit da tag aqui |
+| [`templates/github/deploy.yml`](templates/github/deploy.yml) | CI: lint + testes, build, scan Trivy, push no GHCR e commit da tag aqui |
+| [`templates/github/dependabot.yml`](templates/github/dependabot.yml) | PRs semanais de atualização de dependências para a `develop` |
 
 1. Copie o Dockerfile para a pasta do app e o `deploy.yml` para
    `.github/workflows/`.
 2. No `deploy.yml`, ajuste `INFRA_PROJECT` e o `APPS_JSON` do job `plan`
-   (um item por app: `app`, `context`, `dockerfile`, `build-args` e `paths`).
-   O CI builda e faz deploy **só dos apps cujos `paths` mudaram** no push.
+   (um item por app: `app`, `context`, `dockerfile`, `build-args`, `paths`,
+   `setup` e `test`). O CI testa, builda e faz deploy **só dos apps cujos
+   `paths` mudaram** no push. Copie também
+   [`templates/github/dependabot.yml`](templates/github/dependabot.yml) para
+   `.github/dependabot.yml`, com uma entrada por ecossistema e pasta. Antes de
+   ligar o CI, rode localmente o comando `test` de cada app: um teste que já
+   falha hoje trava todos os deploys.
 3. Coloque o `appRepo` no `projects/<p>/project.yaml` e rode, **neste** repo:
    ```bash
    make github PROJECT=<p>     # develop + INFRA_DEPLOY_KEY + proteção da main
@@ -651,4 +659,53 @@ make observability   # métricas do Ingress + Loki + Alloy + dashboard e datasou
 Arquivos: `scripts/setup-observability.sh`,
 `config/observability/{loki,alloy}-values.yaml`,
 `k8s/grafana-dashboard-apps.yaml` e `k8s/grafana-datasource-loki.yaml`.
+
+## 11. Qualidade e segurança (CI)
+
+### Pipeline de cada app
+
+```
+plan → test → build → deploy
+        │       │
+        │       └─ imagem amd64 → Trivy (relatório na aba Security; gate opcional)
+        │                        → imagem multi-arch → GHCR (só em push)
+        └─ lint + testes (Jest, JUnit com Testcontainers, Nx lint/typecheck)
+                                                    ci ← check único exigido no PR
+```
+
+| Etapa | Barra o deploy? | Detalhe |
+| ----- | --------------- | ------- |
+| **test** | **sim** | comando `test` de cada app no `APPS_JSON`. Os testes Java sobem Postgres e RabbitMQ reais (Testcontainers) no runner |
+| **Trivy: relatório** | não | CVEs HIGH/CRITICAL **com correção** vão para *Security → Code scanning* do repo |
+| **Trivy: gate** | se `TRIVY_GATE` estiver definido | variável do repo (*Settings → Variables*): `CRITICAL` ou `HIGH,CRITICAL` |
+| **ci** | **sim, no PR** | resume plan, test e build. A `main` só aceita PR com `ci` verde |
+
+O Trivy começa **só reportando** porque as imagens atuais têm CVEs CRITICAL
+corrigíveis em dependências: `next` no crivo-fe e no shell, `tomcat-embed` no
+catalog-service, `handlebars` e `proxy-addr` no crivo-be. O caminho:
+
+1. O Dependabot (ligado pelo `make github`) abre PRs com as correções.
+2. O CI testa cada PR. Com tudo verde, faça o merge.
+3. Quando a aba Security zerar os CRITICAL, ligue o gate:
+   `gh variable set TRIVY_GATE --body CRITICAL --repo <owner>/<repo>`.
+
+### Proteções do GitHub (`make github`)
+
+| Controle | O que faz |
+| -------- | --------- |
+| `main` protegida com check `ci` | só entra por PR, com lint, testes, build e scan verdes |
+| **CodeQL** (*default setup*) | análise estática de segurança do código (JS/TS, Java) em todo push e PR |
+| **Dependabot alerts + security updates** | avisa sobre CVEs nas dependências e abre PRs de correção para a `main` |
+| **Dependabot version updates** (`.github/dependabot.yml`) | toda segunda, PRs agrupados de minor/patch para a `develop` |
+| **Secret scanning + push protection** | bloqueia push que contenha token ou senha |
+
+O `make doctor` avisa se algum repo de app estiver sem esses controles.
+
+### CI do repo de infra
+
+[`.github/workflows/validate.yml`](.github/workflows/validate.yml) roda em
+todo push e PR: `helm-lint` de todos os apps e ambientes, render de `argocd/` e
+`k8s/`, `shellcheck` dos scripts e `actionlint` dos templates. Os commits de
+deploy do CI dos apps levam `[skip ci]`. A `main` da infra **não** é
+protegida, porque o CI dos apps faz push direto nela pela deploy key.
 

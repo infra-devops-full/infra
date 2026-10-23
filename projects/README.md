@@ -31,7 +31,7 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 | ------- | ------ |
 | [`crivo/`](crivo) | dois apps (API + front), Postgres, Redis, `app-secrets`, front chamando a API pelo Service interno |
 | [`nest-rabbitmq/`](nest-rabbitmq) | um app e RabbitMQ |
-| [`wlstore/`](wlstore) | microsserviços Spring (um banco por serviço via `extraDbs`, eventos pelo RabbitMQ, variáveis do Spring montadas com `$(VAR)`) e microfrontends Next em Nx (`catalog-mfe` sem ingress, acessado pelo `shell`) |
+| [`wlstore/`](wlstore) | microsserviços Spring (um banco por serviço via `extraDbs`, eventos pelo RabbitMQ, variáveis do Spring montadas com `$(VAR)`) e microfrontends Next em Nx (`catalog-mfe` em `/catalog` e `pricing-mfe` em `/pricing`, no mesmo host do `shell`) |
 
 ## Checklist de um projeto novo
 
@@ -43,4 +43,5 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 - [ ] `envFrom` com os Secrets das dependências (`postgres`, `redis`, `rabbitmq`, `app-secrets`)
 - [ ] `make helm-lint` sem erro
 - [ ] commit e push deste repo, depois `make project-apply PROJECT=<projeto>`
-- [ ] no repo do app: Dockerfile (`templates/`), `.github/workflows/deploy.yml` e o secret `INFRA_REPO_TOKEN`
+- [ ] no repo do app: Dockerfile (`templates/`), `.github/workflows/deploy.yml` (com `setup`/`test` de cada app) e `.github/dependabot.yml`
+- [ ] `make github PROJECT=<projeto>` (deploy key, `develop`, `main` protegida com check `ci`, CodeQL, Dependabot) e `make doctor` sem erros

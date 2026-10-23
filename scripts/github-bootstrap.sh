@@ -11,6 +11,9 @@
 #      Não expira e só dá acesso ao repo de infra.
 #   3. remove o secret antigo INFRA_REPO_TOKEN (substituído pela deploy key)
 #   4. protege a `main` do app: só entra por PR (merge de develop = deploy prod)
+#      e com o check `ci` do workflow verde (lint + testes + build + scan)
+#   5. segurança do repo: CodeQL (análise estática), Dependabot (alertas e PRs
+#      de correção de CVE) e secret scanning com push protection
 #
 # Requer: gh autenticado como admin do repo de infra e dos repos dos apps
 # (gh auth login), ssh-keygen, yq.
@@ -162,7 +165,10 @@ for PROJ in "${PROJECTS[@]}"; do
   if $PROTECT; then
     run gh api -X PUT "repos/$APP_REPO/branches/$DEFAULT/protection" --input - >/dev/null <<'JSON'
 {
-  "required_status_checks": null,
+  "required_status_checks": {
+    "strict": false,
+    "contexts": ["ci"]
+  },
   "enforce_admins": false,
   "required_pull_request_reviews": {
     "required_approving_review_count": 0,
@@ -173,7 +179,27 @@ for PROJ in "${PROJECTS[@]}"; do
   "allow_deletions": false
 }
 JSON
-    ok "$DEFAULT protegida: só PR, sem force push (admin pode furar em emergência)"
+    ok "$DEFAULT protegida: só PR com check \`ci\` verde, sem force push (admin pode furar em emergência)"
+  fi
+
+  # 5. Segurança do repo -------------------------------------------------------
+  # Dependabot: alertas de CVE nas dependências + PRs automáticos de correção.
+  run gh api -X PUT "repos/$APP_REPO/vulnerability-alerts" >/dev/null
+  run gh api -X PUT "repos/$APP_REPO/automated-security-fixes" >/dev/null
+  ok "Dependabot: alertas + PRs de correção de vulnerabilidade"
+  # Secret scanning + push protection (padrão em repo público; garante ligado).
+  run gh api -X PATCH "repos/$APP_REPO" --input - >/dev/null <<'JSON'
+{"security_and_analysis": {"secret_scanning": {"status": "enabled"}, "secret_scanning_push_protection": {"status": "enabled"}}}
+JSON
+  ok "secret scanning + push protection (bloqueia push com token/senha)"
+  # CodeQL no modo "default setup": o GitHub detecta as linguagens e analisa
+  # cada push/PR, sem workflow próprio. Resultados na aba Security.
+  if [[ "$(gh api "repos/$APP_REPO/code-scanning/default-setup" --jq .state 2>/dev/null)" == "configured" ]]; then
+    ok "CodeQL já configurado"
+  elif OUT="$(run gh api -X PATCH "repos/$APP_REPO/code-scanning/default-setup" -f state=configured 2>&1)"; then
+    ok "CodeQL (análise estática) configurado"
+  else
+    warn "CodeQL não configurado: $(grep -o '"message":"[^"]*"' <<<"$OUT" | cut -d'"' -f4)"
   fi
 
   # Workflow presente? ---------------------------------------------------------

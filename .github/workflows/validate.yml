@@ -1,0 +1,45 @@
+# =============================================================================
+# CI do repo de infra: valida a plataforma e os projetos antes de o ArgoCD
+# aplicar. Commits de deploy do CI dos apps levam [skip ci] e não disparam.
+#
+#   helm-lint     charts/app contra cada projects/<p>/apps/<app>/values-<env>.yaml
+#   render        argocd/ + k8s/ renderizam e são YAML válido
+#   shellcheck    scripts da plataforma
+#   actionlint    templates de workflow entregues aos repos dos apps
+# =============================================================================
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # helm, yq e shellcheck já vêm no runner ubuntu-latest.
+      - name: Helm lint (todos os apps × ambientes)
+        run: make helm-lint
+
+      - name: Render de argocd/ + k8s/
+        env:
+          INFRA_REPO_URL: https://github.com/${{ github.repository }}.git
+        run: |
+          ./scripts/apply-platform.sh --render > /tmp/platform.yaml
+          yq -e 'true' /tmp/platform.yaml > /dev/null
+          yq -N 'select(.kind != null) | .kind + " " + .metadata.name' /tmp/platform.yaml
+
+      - name: ShellCheck
+        run: shellcheck -S error setup.sh destroy.sh status.sh create-ghcr-secrets.sh scripts/*.sh
+
+      - name: actionlint (templates de workflow)
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color \
+            templates/github/deploy.yml .github/workflows/validate.yml

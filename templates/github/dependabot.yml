@@ -1,0 +1,44 @@
+# =============================================================================
+# Dependabot — atualização contínua de dependências (template)
+# Copie para <repo-do-app>/.github/dependabot.yml: uma entrada por ecossistema
+# e pasta (npm, maven, docker, github-actions...).
+#
+# Toda segunda abre PRs AGRUPADOS para a branch develop: passam pelo CI
+# (lint + testes + build + scan) e seguem o fluxo normal develop → main.
+# Correções de SEGURANÇA (Dependabot security updates, ligado por
+# `make github`) vão direto para a main, também validadas pelo check `ci`.
+# =============================================================================
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/my-app"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      my-app-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: "/my-app"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      docker-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]

@@ -4,25 +4,29 @@
 #   - env.INFRA_PROJECT     pasta do projeto em projects/ no repo de infra
 #   - APPS_JSON (job plan)  um item por app (= pasta projects/<p>/apps/<app>)
 #
+# Pipeline (por app afetado):
+#   plan → test (lint + testes) → build (imagem + scan Trivy) → deploy
+#                                                         └──► ci (check único)
+#
 # Fluxo de branches → ambientes:
 #   feature/*  ──PR──►  develop  ──PR──►  main
 #      │                   │                │
-#   PR: só build        push: build      push: build
-#   (validação)         + deploy em      + deploy em
-#                         develop           prod
+#   PR: test + build    push: + deploy   push: + deploy
+#   (validação)           em develop       em prod
 #
-# Só os apps AFETADOS pelo push são buildados e deployados (campo `paths` de
-# cada app). Assim, com várias equipes no mesmo repo, o push de uma não
-# rebuilda nem redeploya o app das outras. Buildam TODOS: workflow_dispatch,
-# primeiro push de uma branch e mudanças em .github/workflows/.
+# Só os apps AFETADOS pelo push são testados/buildados/deployados (campo
+# `paths`). Buildam TODOS: workflow_dispatch, primeiro push de uma branch e
+# mudanças em .github/workflows/.
 #
-# Deploy = commit no REPO DE INFRA trocando image.tag em
-#   projects/<INFRA_PROJECT>/apps/<app>/values-<env>.yaml
-# e o ArgoCD faz o rollout no namespace <projeto>-<env>.
+# O job `ci` resume o resultado num check só — é ele que a proteção da `main`
+# exige (configurado por `make github` no repo de infra).
 #
-# Secret necessário no repo do app (criado por `make github` no repo de infra):
-#   INFRA_DEPLOY_KEY  chave SSH privada; a pública está no repo de infra como
-#                     deploy key com escrita.
+# Secret necessário no repo do app (criado por `make github`):
+#   INFRA_DEPLOY_KEY  chave SSH privada com escrita no repo de infra.
+# Variável opcional do repo (Settings → Secrets and variables → Variables):
+#   TRIVY_GATE        vazio = scan só reporta (aba Security);
+#                     CRITICAL ou HIGH,CRITICAL = barra a imagem com CVE
+#                     corrigível nessas severidades.
 # =============================================================================
 name: build-and-deploy
 
@@ -42,13 +46,18 @@ env:
   DEPLOY_ENV: ${{ github.ref_name == 'main' && 'prod' || 'develop' }}
   # PR só valida (sem push); push publica a imagem.
   PUBLISH: ${{ github.event_name != 'pull_request' }}
+  # Toolchains dos testes (mesmas versões dos Dockerfiles).
+  NODE_VERSION: "24"
+  NPM_VERSION: "11.6.2"
+  PNPM_VERSION: "10.29.3"
+  JAVA_VERSION: "21"
 
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Decide quais apps buildar a partir dos arquivos alterados.
+  # Decide quais apps testar/buildar a partir dos arquivos alterados.
   plan:
     runs-on: ubuntu-latest
     outputs:
@@ -65,8 +74,11 @@ jobs:
           # context:    contexto do docker build
           # dockerfile: caminho do Dockerfile
           # build-args: opcional, linhas KEY=valor separadas por \n
-          # paths:      prefixos de caminho que, se alterados, rebuildam o app
+          # paths:      prefixos de caminho que, se alterados, afetam o app
           #             (inclua as libs compartilhadas que ele usa)
+          # setup:      toolchain dos testes: node | pnpm | java | "" (nenhuma)
+          # test:       comando de lint/testes, rodado na raiz do repo
+          #             ("" = sem testes; o build ainda roda)
           APPS_JSON: |
             [
               {
@@ -74,7 +86,9 @@ jobs:
                 "context": "./my-app",
                 "dockerfile": "./my-app/Dockerfile",
                 "build-args": "",
-                "paths": ["my-app/"]
+                "paths": ["my-app/"],
+                "setup": "node",
+                "test": "cd my-app && npm ci && npm run lint && npm test"
               }
             ]
           EVENT: ${{ github.event_name }}
@@ -85,7 +99,7 @@ jobs:
           import json, os, subprocess
           apps = json.loads(os.environ["APPS_JSON"])
           base = os.environ.get("PR_BASE") or os.environ.get("BEFORE") or ""
-          changed = None  # None = buildar todos
+          changed = None  # None = todos
           if os.environ["EVENT"] != "workflow_dispatch" and base and set(base) != {"0"}:
               try:
                   changed = subprocess.check_output(
@@ -106,13 +120,61 @@ jobs:
               out.write("apps=" + names + "\n")
           PY
 
-  build:
+  # Lint + testes de cada app afetado. Bloqueia build e deploy se falhar.
+  test:
     needs: plan
     if: needs.plan.outputs.apps != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        if: matrix.setup == 'node' || matrix.setup == 'pnpm'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # O lock dos apps é gerado com este npm; o npm mais novo da imagem do
+      # runner pode recusar o `npm ci` (mesmo motivo do pin nos Dockerfiles).
+      - name: npm ${{ env.NPM_VERSION }}
+        if: matrix.setup == 'node'
+        run: npm install -g "npm@${NPM_VERSION}"
+
+      - name: pnpm ${{ env.PNPM_VERSION }}
+        if: matrix.setup == 'pnpm'
+        run: corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
+
+      # Testcontainers usa o Docker do runner — por isso os testes Java rodam
+      # direto no runner, não dentro de um container.
+      - uses: actions/setup-java@v6.0.1
+        if: matrix.setup == 'java'
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Lint + testes (${{ matrix.app }})
+        if: matrix.test != ''
+        env:
+          TEST_CMD: ${{ matrix.test }}
+          CI: "true"
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+        run: bash -euo pipefail -c "$TEST_CMD"
+
+  # Imagem + scan de vulnerabilidades. Publica só em push (develop/main).
+  build:
+    needs: [plan, test]
+    if: needs.plan.outputs.apps != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
       packages: write
+      security-events: write   # resultado do Trivy na aba Security
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -131,14 +193,58 @@ jobs:
             echo "channel=develop" >> "$GITHUB_OUTPUT"
           fi
 
-      # Imagem multi-arch: amd64 (servidores/CI) + arm64 (k3d no Mac Apple Silicon).
-      # Em PR só amd64 — é validação, e o QEMU deixa o build bem mais lento.
+      - uses: docker/setup-buildx-action@v4
+
+      # 1) Imagem amd64 local, só para o scan (o cache deixa o build final rápido).
+      - name: Build para scan (amd64)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix['build-args'] }}
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: scan/${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      # 2) Relatório completo (HIGH/CRITICAL corrigíveis) na aba Security.
+      - name: Trivy — relatório
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: scan/${{ matrix.app }}:ci
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - uses: github/codeql-action/upload-sarif@v4.38.3
+        if: always() && hashFiles('trivy.sarif') != ''
+        continue-on-error: true   # repo sem code scanning não derruba o build
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-${{ matrix.app }}
+
+      # 3) Gate: barra a imagem se houver CVE corrigível na severidade de
+      #    vars.TRIVY_GATE (vazio = não barra).
+      - name: Trivy — gate (${{ vars.TRIVY_GATE || 'só relatório' }})
+        if: vars.TRIVY_GATE != ''
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: scan/${{ matrix.app }}:ci
+          format: table
+          severity: ${{ vars.TRIVY_GATE }}
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+
+      # 4) Imagem final multi-arch: amd64 (servidores/CI) + arm64 (k3d no Mac).
       - uses: docker/setup-qemu-action@v4
         if: env.PUBLISH == 'true'
         with:
           platforms: arm64
-
-      - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
         if: env.PUBLISH == 'true'
@@ -148,12 +254,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v7
+        if: env.PUBLISH == 'true'
         with:
           context: ${{ matrix.context }}
-          platforms: ${{ env.PUBLISH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix['build-args'] }}
-          push: ${{ env.PUBLISH == 'true' }}
+          platforms: linux/amd64,linux/arm64
+          push: true
           tags: |
             ${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }}
             ${{ steps.img.outputs.name }}:${{ steps.img.outputs.channel }}
@@ -206,3 +313,19 @@ jobs:
             sleep $((i * 5))
           done
           exit 1
+
+  # Check único exigido pela proteção da main: passa se nada falhou
+  # (apps não afetados aparecem como "skipped", o que é ok).
+  ci:
+    if: always()
+    needs: [plan, test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          RESULTS: ${{ needs.plan.result }} ${{ needs.test.result }} ${{ needs.build.result }}
+        run: |
+          echo "plan/test/build: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "::error::pipeline com falha ($r)"; exit 1 ;; esac
+          done
