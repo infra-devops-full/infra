@@ -3,7 +3,8 @@
 # github-bootstrap.sh  (genérico)
 # -----------------------------------------------------------------------------
 # Configura no GitHub tudo que a esteira de um projeto precisa. Idempotente.
-# Para cada projeto (projects/<p>/project.yaml → appRepo):
+# Para cada repo de app do projeto (projects/<p>/project.yaml → appRepo, ou
+# appRepos quando cada app/time tem o seu repo):
 #
 #   1. branch `develop` no repo do app (criada a partir da main)
 #   2. deploy key SSH: pública no REPO DE INFRA (com escrita), privada como
@@ -105,17 +106,13 @@ fi
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 FAILED=0
 
-for PROJ in "${PROJECTS[@]}"; do
-  echo ""
-  echo -e "${CYAN}━━ Projeto: $PROJ${NC}"
-  if [[ ! -f "$(project_manifest "$PROJ")" ]]; then fail "projects/$PROJ/project.yaml não existe"; FAILED=1; continue; fi
-  APP_URL="$(_pq "$PROJ" '.appRepo // ""')"
-  if [[ -z "$APP_URL" ]]; then warn "sem appRepo no project.yaml — pulei"; continue; fi
-  APP_REPO="$(slug "$APP_URL")"
+# Configura um repo de app (owner/repo). Retorna 1 se algo falhou.
+setup_repo() {
+  local APP_REPO="$1" DEFAULT SHA TITLE KEY_ID HAS_SECRET KEYFILE OUT b
   echo "  repo do app: $APP_REPO"
 
   if [[ "$(gh api "repos/$APP_REPO" --jq .permissions.admin 2>/dev/null)" != "true" ]]; then
-    fail "sem admin em $APP_REPO (ou repo não existe)"; FAILED=1; continue
+    fail "sem admin em $APP_REPO (ou repo não existe)"; return 1
   fi
 
   # 1. Branch develop --------------------------------------------------------
@@ -138,13 +135,13 @@ for PROJ in "${PROJECTS[@]}"; do
     ok "deploy key e secret INFRA_DEPLOY_KEY já configurados (use --rotate p/ gerar nova)"
   else
     [[ -n "$KEY_ID" ]] && run gh api -X DELETE "repos/$INFRA_REPO/keys/$KEY_ID" >/dev/null
-    KEYFILE="$TMP/$PROJ"
+    KEYFILE="$TMP/${APP_REPO//\//_}"
     ssh-keygen -q -t ed25519 -N "" -C "$TITLE" -f "$KEYFILE"
     if $DRY; then
       run gh api -X POST "repos/$INFRA_REPO/keys" -f title="$TITLE" -f key="<chave pública>" -F read_only=false
     elif ! OUT="$(gh api -X POST "repos/$INFRA_REPO/keys" -f title="$TITLE" -f key="$(cat "$KEYFILE.pub")" -F read_only=false 2>&1)"; then
       fail "GitHub recusou a deploy key: $(grep -o '"message":"[^"]*"' <<<"$OUT" | tail -1 | cut -d'"' -f4)"
-      rm -f "$KEYFILE" "$KEYFILE.pub"; FAILED=1; continue
+      rm -f "$KEYFILE" "$KEYFILE.pub"; return 1
     fi
     if $DRY; then
       echo -e "    ${CYAN}[dry-run]${NC} gh secret set INFRA_DEPLOY_KEY --repo $APP_REPO < chave-privada"
@@ -209,6 +206,18 @@ JSON
     else
       warn ".github/workflows/deploy.yml ainda não está em $b (copie de templates/github/deploy.yml e faça push)"
     fi
+  done
+}
+
+for PROJ in "${PROJECTS[@]}"; do
+  echo ""
+  echo -e "${CYAN}━━ Projeto: $PROJ${NC}"
+  if [[ ! -f "$(project_manifest "$PROJ")" ]]; then fail "projects/$PROJ/project.yaml não existe"; FAILED=1; continue; fi
+  REPOS=()
+  while IFS= read -r u; do REPOS+=("$u"); done < <(project_app_repos "$PROJ")
+  if [[ ${#REPOS[@]} -eq 0 ]]; then warn "sem appRepo/appRepos no project.yaml — pulei"; continue; fi
+  for APP_URL in "${REPOS[@]}"; do
+    setup_repo "$(slug "$APP_URL")" || FAILED=1
   done
 done
 

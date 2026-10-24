@@ -46,6 +46,13 @@ _pq() {
   yq -r "$2" "$(project_manifest "$1")"
 }
 
+# Repos de aplicação do projeto (uma URL por linha): `appRepos` (lista, quando
+# cada app/time tem o seu repo) ou `appRepo` (um repo só). Usado pelo
+# make github e pelo doctor.
+project_app_repos() {
+  _pq "$1" '(.appRepos // [.appRepo]) | .[] | select(. != null and . != "")'
+}
+
 # Apps = pastas em projects/<p>/apps/ (um por linha).
 project_apps() {
   local d; for d in "$(project_dir "$1")"/apps/*/; do

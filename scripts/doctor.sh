@@ -9,7 +9,7 @@
 #   .env          GITHUB_TOKEN: vazio é o certo p/ imagens públicas; se
 #                 preenchido, tem de ser PAT classic aceito pelo GHCR
 #   projetos      apps/values, image.repository, secrets/<env>.env x example.env
-#   github        por appRepo: branch develop, secret INFRA_DEPLOY_KEY, deploy
+#   github        por appRepo/appRepos: branch develop, secret INFRA_DEPLOY_KEY, deploy
 #                 key no repo de infra, workflow presente
 #   git (infra)   mudanças em projects/ sem commit/push (o ArgoCD lê do GitHub)
 #
@@ -226,19 +226,20 @@ else
   INFRA_REPO="$(slug "$(infra_repo_url)")"
   KEYS="$(gh api "repos/$INFRA_REPO/keys" --paginate --jq '.[] | "\(.title) \(.read_only)"' 2>/dev/null)"
   for P in $PROJS; do
-    URL="$(_pq "$P" '.appRepo // ""')"
-    [[ -z "$URL" ]] && { warn "$P: sem appRepo no project.yaml"; continue; }
-    R="$(slug "$URL")"
-    if ! gh api "repos/$R" >/dev/null 2>&1; then err "$P: repo $R não encontrado/sem acesso"; continue; fi
-    PROBLEMS=0
-    gh api "repos/$R/branches/develop" >/dev/null 2>&1 || { err "$R: sem branch develop"; PROBLEMS=1; }
-    gh secret list --repo "$R" --json name --jq '.[].name' 2>/dev/null | grep -qx INFRA_DEPLOY_KEY \
-      || { err "$R: sem secret INFRA_DEPLOY_KEY"; PROBLEMS=1; }
-    grep -q "^ci-deploy:$R false$" <<<"$KEYS" \
-      || { err "$R: sem deploy key com escrita em $INFRA_REPO"; PROBLEMS=1; }
-    for B in develop main; do
-      gh api "repos/$R/contents/.github/workflows/deploy.yml?ref=$B" >/dev/null 2>&1 \
-        || warn "$R: workflow deploy.yml ausente em $B"
+    URLS="$(project_app_repos "$P")"
+    [[ -z "$URLS" ]] && { warn "$P: sem appRepo/appRepos no project.yaml"; continue; }
+    for URL in $URLS; do
+      R="$(slug "$URL")"
+      if ! gh api "repos/$R" >/dev/null 2>&1; then err "$P: repo $R não encontrado/sem acesso"; continue; fi
+      PROBLEMS=0
+      gh api "repos/$R/branches/develop" >/dev/null 2>&1 || { err "$R: sem branch develop"; PROBLEMS=1; }
+      gh secret list --repo "$R" --json name --jq '.[].name' 2>/dev/null | grep -qx INFRA_DEPLOY_KEY \
+        || { err "$R: sem secret INFRA_DEPLOY_KEY"; PROBLEMS=1; }
+      grep -q "^ci-deploy:$R false$" <<<"$KEYS" \
+        || { err "$R: sem deploy key com escrita em $INFRA_REPO"; PROBLEMS=1; }
+      for B in develop main; do
+        gh api "repos/$R/contents/.github/workflows/deploy.yml?ref=$B" >/dev/null 2>&1 \
+          || warn "$R: workflow deploy.yml ausente em $B"
     done
     [[ $PROBLEMS -eq 0 ]] && ok "$R: develop + INFRA_DEPLOY_KEY + deploy key"
     # Qualidade e segurança (avisos: o deploy funciona sem, mas sem proteção).
@@ -251,6 +252,7 @@ else
       || { warn "$R: alertas do Dependabot desligados"; SEC=1; }
     [[ $SEC -eq 0 ]] && ok "$R: check ci obrigatório + CodeQL + Dependabot"
     [[ $PROBLEMS -eq 1 || $SEC -eq 1 ]] && hint "make github PROJECT=$P"
+    done
   done
 fi
 

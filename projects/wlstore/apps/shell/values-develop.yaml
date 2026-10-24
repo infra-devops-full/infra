@@ -1,5 +1,0 @@
-# image.tag: atualizado pelo CI do app a cada push na branch develop.
-image:
-  tag: sha-dc7a2a4
-ingress:
-  host: develop.wlstore.local # domínio único do projeto: o shell em /, cada mfe no seu basePath

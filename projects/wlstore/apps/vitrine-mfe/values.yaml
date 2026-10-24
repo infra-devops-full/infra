@@ -1,0 +1,34 @@
+# vitrine-mfe (Next.js) — a loja. Valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+#
+# Next.js Multi-Zones: a vitrine é o app padrão do host do projeto e responde
+# em "/" (tudo que nenhum outro app reivindica). Os outros apps dividem o MESMO
+# host (ingress.host nos values-<env>.yaml), cada um no seu basePath, e quem
+# roteia é o NGINX Ingress. Repo: github.com/whitelabel-store/wlstore-vitrine.
+
+image:
+  # Publicada pelo CI do repo wlstore-vitrine.
+  repository: ghcr.io/whitelabel-store/wlstore-vitrine/vitrine-mfe
+  pullPolicy: IfNotPresent
+
+service:
+  port: 3000
+
+livenessProbe:
+  path: /
+readinessProbe:
+  path: /
+
+# Lidas em runtime pelo servidor Next (Server Actions): a imagem é a mesma em
+# todos os ambientes. O backend é chamado pela rede interna do namespace.
+env:
+  CATALOG_API_URL: "http://catalog-service:8081"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 384Mi
+  requests:
+    cpu: 20m
+    memory: 128Mi

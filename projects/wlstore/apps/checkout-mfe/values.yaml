@@ -1,0 +1,35 @@
+# checkout-mfe (Next.js) — carrinho e finalização do pedido. Valores comuns a
+# todos os ambientes. app.name / app.environment / app.project são injetados
+# pelo ArgoCD.
+#
+# Divide o host do projeto com a vitrine; o NGINX Ingress manda /checkout/*
+# para cá. Contrato: ingress.path == basePath do next.config.js.
+# Repo: github.com/whitelabel-store/wlstore-checkout.
+#
+# ORDER_API_URL fica de fora enquanto o order-service não está no cluster
+# (o app ainda é um esqueleto e não chama o backend).
+
+image:
+  # Publicada pelo CI do repo wlstore-checkout.
+  repository: ghcr.io/whitelabel-store/wlstore-checkout/checkout-mfe
+  pullPolicy: IfNotPresent
+
+service:
+  port: 4400
+
+ingress:
+  path: /checkout
+
+# /checkout redireciona (307) para /checkout/carrinho; a probe usa a página.
+livenessProbe:
+  path: /checkout/carrinho
+readinessProbe:
+  path: /checkout/carrinho
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 384Mi
+  requests:
+    cpu: 20m
+    memory: 128Mi

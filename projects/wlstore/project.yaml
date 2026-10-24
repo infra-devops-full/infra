@@ -4,22 +4,31 @@
 # Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
 #   apps/catalog-service/  Spring Boot (porta 8081, banco catalogdb, Flyway)
 #   apps/pricing-service/  Spring Boot (porta 8082, banco pricingdb, Flyway)
-#   apps/shell/            Next.js host (porta 3000, em / do host do projeto)
-#   apps/catalog-mfe/      Next.js microfrontend (porta 4200, em /catalog do mesmo host)
-#   apps/pricing-mfe/      Next.js microfrontend (porta 4300, em /pricing do mesmo host)
-# Cada mfe espelha um serviço: catalog-mfe ↔ catalog-service, pricing-mfe ↔ pricing-service.
+#   apps/vitrine-mfe/      Next.js, a loja (porta 3000, em / do host do projeto)
+#   apps/painel-mfe/       Next.js, painel do lojista (porta 4300, em /painel)
+#   apps/checkout-mfe/     Next.js, checkout (porta 4400, em /checkout)
+# Os microfrontends se dividem por área do produto, não por serviço: a vitrine
+# usa catalog-service (e o preço que ele copia do pricing por evento).
 # catalog ↔ pricing trocam eventos pelo RabbitMQ (catalog.events / pricing.events).
 # → namespaces wlstore-develop / wlstore-prod
-# → front: <env>.wlstore.local (shell em /, mfes no basePath — Next.js Multi-Zones)
+# → front: <env>.wlstore.local (vitrine em /, outros apps no basePath — Next.js Multi-Zones)
 # → APIs: <env>.<app>.wlstore.local
+#
+# Migração em andamento: shell, catalog-mfe e pricing-mfe (monorepo antigo)
+# só existem no prod, até a promoção dos apps novos para a main.
 #
 # Serviços ainda não implementados (identity, inventory, notification, order,
 # payment, discovery-server) ficam de fora: para incluir um, crie
 # apps/<serviço>/ com values.yaml + values-<env>.yaml e o banco em extraDbs.
 # =============================================================================
 
-# Código da aplicação (documentação — quem builda é o CI desse repo).
-appRepo: https://github.com/geraldobl58/wlstore
+# Repos de código (um por app/time; quem builda é o CI de cada um). Usados
+# pelo `make github` (develop, deploy key, proteção da main) e pelo doctor.
+appRepos:
+  - https://github.com/whitelabel-store/wlstore-be        # catalog-service, pricing-service
+  - https://github.com/whitelabel-store/wlstore-vitrine   # vitrine-mfe
+  - https://github.com/whitelabel-store/wlstore-painel    # painel-mfe
+  - https://github.com/whitelabel-store/wlstore-checkout  # checkout-mfe
 
 # Um Postgres por ambiente, um banco por serviço (database per service).
 # → Secret `postgres` com DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, JDBC_URL...

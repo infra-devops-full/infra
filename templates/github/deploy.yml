@@ -51,6 +51,13 @@ env:
   NPM_VERSION: "11.6.2"
   PNPM_VERSION: "10.29.3"
   JAVA_VERSION: "21"
+  # Registry npm de pacotes privados/internos (opcional). Ex.: pacotes da org no
+  # GitHub Packages → NPM_REGISTRY: https://npm.pkg.github.com e
+  # NPM_SCOPE: "@minha-org". Vazio = só o npmjs. O token é o GITHUB_TOKEN do
+  # run: nos testes como NODE_AUTH_TOKEN e no Docker como build secret
+  # `npm_token` (o Dockerfile lê /run/secrets/npm_token só no `npm ci`).
+  NPM_REGISTRY: ""
+  NPM_SCOPE: ""
 
 concurrency:
   group: build-${{ github.ref }}
@@ -127,6 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read   # pacotes do NPM_REGISTRY (GitHub Packages)
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -137,6 +145,8 @@ jobs:
         if: matrix.setup == 'node' || matrix.setup == 'pnpm'
         with:
           node-version: ${{ env.NODE_VERSION }}
+          registry-url: ${{ env.NPM_REGISTRY }}
+          scope: ${{ env.NPM_SCOPE }}
 
       # O lock dos apps é gerado com este npm; o npm mais novo da imagem do
       # runner pode recusar o `npm ci` (mesmo motivo do pin nos Dockerfiles).
@@ -162,6 +172,7 @@ jobs:
         env:
           TEST_CMD: ${{ matrix.test }}
           CI: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
         run: bash -euo pipefail -c "$TEST_CMD"
@@ -202,6 +213,8 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix['build-args'] }}
+          secrets: |
+            npm_token=${{ secrets.GITHUB_TOKEN }}
           platforms: linux/amd64
           load: true
           push: false
@@ -259,6 +272,8 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix['build-args'] }}
+          secrets: |
+            npm_token=${{ secrets.GITHUB_TOKEN }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
