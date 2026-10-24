@@ -1,6 +1,6 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 # "develop" é a tag móvel do primeiro build; o CI troca pela tag sha-<commit>.
 image:
-  tag: develop
+  tag: sha-7d63a05
 ingress:
   host: develop.wlstore.local # mesmo host da vitrine; o Ingress manda /checkout para cá
