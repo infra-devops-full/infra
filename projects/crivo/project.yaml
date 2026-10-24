@@ -11,6 +11,9 @@
 # Aqui só vai o que a plataforma provisiona por namespace.
 # =============================================================================
 
+# Texto do projeto na UI do ArgoCD (AppProject).
+description: "Crivo — API NestJS (crivo-be) e front Next.js (crivo-fe)"
+
 # Código da aplicação (documentação — quem builda é o CI desse repo).
 appRepo: https://github.com/geraldobl58/crivo
 

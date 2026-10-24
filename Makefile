@@ -179,7 +179,13 @@ apply-argocd: ## (Re)aplica a plataforma genérica: argocd/ + k8s/
 render-platform: ## Mostra argocd/ + k8s/ renderizados (sem aplicar)
 	@./scripts/apply-platform.sh --render
 
-helm-lint: ## Valida charts/app contra cada projects/<p>/apps/<app>/values-<env>.yaml
+helm-lint: ## Valida charts/app (cada values-<env>.yaml) e charts/argocd-project (cada project.yaml)
+	@for f in projects/*/project.yaml; do \
+		proj=$$(basename $$(dirname $$f)); \
+		echo "$(BLUE)→ helm lint argocd-project/$$proj$(RESET)"; \
+		helm lint charts/argocd-project --quiet -f $$f \
+			--set project.name=$$proj,infraRepoUrl=https://example.invalid/infra.git || exit 1; \
+	done
 	@for f in projects/*/apps/*/values-*.yaml; do \
 		dir=$$(dirname $$f); app=$$(basename $$dir); proj=$$(basename $$(dirname $$(dirname $$dir))); \
 		env=$$(basename $$f .yaml); env=$${env#values-}; \

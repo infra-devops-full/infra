@@ -26,6 +26,23 @@ data:
         "platform",
         "apps"
       ],
+      "links": [
+        {
+          "title": "SLOs e alertas",
+          "type": "link",
+          "url": "/d/platform-slos",
+          "keepTime": true,
+          "includeVars": true,
+          "icon": "dashboard"
+        },
+        {
+          "title": "ArgoCD do projeto",
+          "type": "link",
+          "url": "http://argocd.devops.local/applications?proj=${project}",
+          "targetBlank": true,
+          "icon": "external link"
+        }
+      ],
       "editable": true,
       "schemaVersion": 39,
       "time": {

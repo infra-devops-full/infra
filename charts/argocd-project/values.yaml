@@ -1,0 +1,12 @@
+# Preenchidos pelo argocd/applicationset-projects.yaml:
+#   project.name  nome da pasta em projects/
+#   infraRepoUrl  repo de infra (única origem permitida aos apps)
+# e lidos do projects/<p>/project.yaml (passado como values file):
+#   description   texto do projeto na UI do ArgoCD (opcional)
+#   appRepos / appRepo  repos de código (viram links no AppProject)
+project:
+  name: ""
+infraRepoUrl: ""
+description: ""
+appRepos: []
+appRepo: ""

@@ -1,0 +1,54 @@
+# =============================================================================
+# ApplicationSet genérico dos PROJETOS: cada projects/<p>/project.yaml no Git
+# vira uma Application `project-<p>` que cria o AppProject <p> (chart
+# charts/argocd-project). Na UI do ArgoCD, cada projeto aparece separado no
+# filtro "Projects", com a description do project.yaml.
+# Renderizado com envsubst (${INFRA_REPO_URL} ${INFRA_BRANCH}).
+#
+# Adicionar projeto = criar projects/<p>/project.yaml. Nada aqui muda.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-projects
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: ${INFRA_REPO_URL}
+        revision: ${INFRA_BRANCH}
+        files:
+          - path: "projects/*/project.yaml"
+  template:
+    metadata:
+      name: 'project-{{ index .path.segments 1 }}'
+      labels:
+        devops-platform/project: '{{ index .path.segments 1 }}'
+        devops-platform/kind: project
+    spec:
+      project: platform
+      source:
+        repoURL: ${INFRA_REPO_URL}
+        targetRevision: ${INFRA_BRANCH}
+        path: charts/argocd-project
+        helm:
+          releaseName: 'project-{{ index .path.segments 1 }}'
+          valueFiles:
+            - '../../{{ .path.path }}/project.yaml'
+          parameters:
+            - name: project.name
+              value: '{{ index .path.segments 1 }}'
+            - name: infraRepoUrl
+              value: ${INFRA_REPO_URL}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+  syncPolicy:
+    preserveResourcesOnDeletion: false

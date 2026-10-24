@@ -10,6 +10,8 @@
 #   chart:      charts/app (genérico)
 #   values:     apps/<app>/values.yaml + apps/<app>/values-<env>.yaml
 #   namespace:  <projeto>-<env>
+#   AppProject: <projeto> (criado por argocd/applicationset-projects.yaml)
+#   links:      dashboard e SLOs do app no Grafana, já filtrados
 #
 # Adicionar projeto/app/ambiente = commitar os arquivos em projects/.
 # Nada aqui muda.
@@ -36,8 +38,18 @@ spec:
         devops-platform/project: '{{ index .path.segments 1 }}'
         devops-platform/app: '{{ index .path.segments 3 }}'
         devops-platform/env: '{{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}'
+        devops-platform/kind: app
+      annotations:
+        # Viram atalhos no card e nos detalhes da Application na UI.
+        link.argocd.argoproj.io/grafana-dashboard: 'http://grafana.devops.local/d/platform-apps?var-project={{ index .path.segments 1 }}&var-env={{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}&var-app={{ index .path.segments 3 }}'
+        link.argocd.argoproj.io/grafana-slos: 'http://grafana.devops.local/d/platform-slos?var-project={{ index .path.segments 1 }}&var-env={{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}&var-app={{ index .path.segments 3 }}'
     spec:
-      project: platform-apps
+      project: '{{ index .path.segments 1 }}'
+      info:
+        - name: Ambiente
+          value: '{{ .path.filename | trimPrefix "values-" | trimSuffix ".yaml" }}'
+        - name: Values
+          value: '{{ .path.path }}/{{ .path.filename }}'
       source:
         repoURL: ${INFRA_REPO_URL}
         targetRevision: ${INFRA_BRANCH}

@@ -10,6 +10,9 @@
 # Aqui só vai o que a plataforma provisiona por namespace.
 # =============================================================================
 
+# Texto do projeto na UI do ArgoCD (AppProject).
+description: "Microsserviço NestJS de produtos com RabbitMQ"
+
 # Código da aplicação (documentação — quem builda é o CI desse repo).
 appRepo: https://github.com/geraldobl58/microservice-with-nestjs-rabbitmq
 

@@ -62,6 +62,9 @@ infra/environments/*/secrets/*.yaml
 **/*secret*.yml
 # Exception: Helm secret TEMPLATES (generate secrets from values, not real secrets)
 !**/helm/**/templates/*secret*.yaml
+# Exception: ApplicationSet que aplica os SealedSecrets (é manifesto da
+# plataforma, não contém segredo). Sem isto ele nunca ia para o Git.
+!argocd/applicationset-secrets.yaml
 *.key
 *.pem
 *.crt

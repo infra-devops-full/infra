@@ -172,8 +172,13 @@ dashboard = {
     "schemaVersion": 39,
     "time": {"from": "now-24h", "to": "now"},
     "refresh": "1m",
+    # Os dois dashboards usam as mesmas variáveis (project, env, app), então a
+    # navegação entre eles mantém a seleção.
     "links": [{"title": "Apps (requests, logs, recursos)", "type": "link", "url": "/d/platform-apps",
-               "keepTime": True, "includeVars": False, "icon": "dashboard"},
+               "keepTime": True, "includeVars": True, "icon": "dashboard"},
+              {"title": "ArgoCD do projeto", "type": "link",
+               "url": "http://argocd.devops.local/applications?proj=${project}",
+               "targetBlank": True, "icon": "external link"},
               {"title": "Alertmanager", "type": "link", "url": "http://alertmanager.devops.local",
                "targetBlank": True, "icon": "bolt"}],
     "templating": {"list": [

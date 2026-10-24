@@ -22,6 +22,9 @@
 # apps/<serviço>/ com values.yaml + values-<env>.yaml e o banco em extraDbs.
 # =============================================================================
 
+# Texto do projeto na UI do ArgoCD (AppProject).
+description: "WLStore — e-commerce whitelabel: vitrine, painel e checkout (Next.js) + catalog e pricing (Spring)"
+
 # Repos de código (um por app/time; quem builda é o CI de cada um). Usados
 # pelo `make github` (develop, deploy key, proteção da main) e pelo doctor.
 appRepos:

@@ -1,0 +1,32 @@
+{{- $name := required "project.name é obrigatório" .Values.project.name -}}
+{{- $repos := .Values.appRepos | default (compact (list .Values.appRepo)) -}}
+# AppProject de um projeto: agrupa os apps dele na UI do ArgoCD e limita onde
+# eles podem ser aplicados (só os namespaces <projeto>-<env>).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  labels:
+    devops-platform/project: {{ $name }}
+  {{- with $repos }}
+  annotations:
+    {{- range $i, $repo := . }}
+    devops-platform/app-repo-{{ $i }}: {{ $repo | quote }}
+    {{- end }}
+  {{- end }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: {{ .Values.description | default (printf "Projeto %s (projects/%s)" $name $name) | quote }}
+  sourceRepos:
+    - {{ required "infraRepoUrl é obrigatório" .Values.infraRepoUrl | quote }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: {{ printf "%s-*" $name | quote }}
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

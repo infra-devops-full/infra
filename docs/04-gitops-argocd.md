@@ -32,14 +32,47 @@ projects/wlstore/apps/catalog-service/values-develop.yaml
 
 O nome da Application é `<app>-<env>`. Ele ganha o prefixo `<projeto>-` quando
 o app não começa com o nome do projeto (`crivo-be-develop`,
-`wlstore-shell-develop`).
+`wlstore-vitrine-mfe-develop`).
 
 Por isso **adicionar app ou ambiente não exige mexer no ArgoCD**: basta
 commitar o arquivo.
 
-[`argocd/appproject.yaml`](../argocd/appproject.yaml) define o projeto
-`platform-apps`: só o repo de infra como origem, e os namespaces de infra
-(`argocd`, `monitoring`, `kube-*`) bloqueados como destino.
+## Um AppProject por projeto
+
+Cada projeto aparece separado na UI (filtro **Projects** na barra lateral) e
+só consegue aplicar nos seus próprios namespaces:
+
+```
+argocd/appproject.yaml               AppProject "platform" (só cria AppProjects)
+argocd/applicationset-projects.yaml  projects/<p>/project.yaml → Application project-<p>
+                                       └─ charts/argocd-project → AppProject <p>
+argocd/applicationset.yaml           apps     → AppProject <p>
+argocd/applicationset-secrets.yaml   segredos → AppProject <p>
+```
+
+| AppProject | Contém | Pode aplicar em |
+| ---------- | ------ | --------------- |
+| `platform` | `project-<p>` (um por projeto) | só `AppProject` no namespace `argocd` |
+| `<p>` | apps (`kind=app`) e segredos (`kind=secrets`) do projeto | namespaces `<p>-*` |
+
+A descrição de cada AppProject vem do campo `description` do
+`projects/<p>/project.yaml`; os repos de código (`appRepos`/`appRepo`) viram
+anotações dele.
+
+### Atalhos na UI
+
+Cada Application de app traz:
+
+- **links** para o dashboard e para os SLOs do app no Grafana, já filtrados
+  por projeto, ambiente e app (anotações `link.argocd.argoproj.io/*`);
+- **Info** (aba *Summary*): ambiente e arquivo de values que a gerou.
+
+Para achar algo rápido: filtro **Projects** (um projeto), **Labels**
+`devops-platform/env=develop` (um ambiente) ou `devops-platform/kind=app`
+(esconde segredos e AppProjects).
+
+Os dashboards do Grafana linkam de volta: *ArgoCD do projeto* abre a lista já
+filtrada no projeto selecionado.
 
 ## Operando
 
@@ -69,3 +102,4 @@ commit mantém o Git como fonte única e deixa registrado quem, quando e por qu�
 | Synced mas Degraded | o problema é no pod, não no Git | [11-treino](11-treino-quebre-e-conserte.md): `describe`/`events` |
 | mudança feita com `kubectl` sumiu | selfHeal | commitar no Git |
 | ApplicationSet não gera apps | erro no template | `kubectl logs -n argocd deploy/argocd-applicationset-controller` |
+| `AppProject <p> not found` numa Application | o `project-<p>` ainda não sincronizou | aguarde/`make refresh APP=project-<p>`; confira o `project.yaml` |

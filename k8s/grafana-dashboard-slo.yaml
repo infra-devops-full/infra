@@ -35,8 +35,15 @@ data:
           "type": "link",
           "url": "/d/platform-apps",
           "keepTime": true,
-          "includeVars": false,
+          "includeVars": true,
           "icon": "dashboard"
+        },
+        {
+          "title": "ArgoCD do projeto",
+          "type": "link",
+          "url": "http://argocd.devops.local/applications?proj=${project}",
+          "targetBlank": true,
+          "icon": "external link"
         },
         {
           "title": "Alertmanager",

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: argocd-project
+description: AppProject do ArgoCD para um projeto de projects/ (genérico)
+type: application
+version: 0.1.0
