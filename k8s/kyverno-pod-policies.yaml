@@ -1,0 +1,157 @@
+# =============================================================================
+# Políticas de admissão dos pods de projeto (Kyverno, ValidatingPolicy/CEL).
+#
+# Valem só para namespaces com o label devops-platform/project. O autogen
+# aplica as regras de Pod também a Deployment/StatefulSet/Job/CronJob, então
+# um manifesto ruim é recusado já no sync do ArgoCD, com a mensagem abaixo.
+#
+#   Deny  (recusa)  platform-disallow-latest     imagem com tag imutável
+#                   platform-require-resources   requests de CPU/memória e limit de memória
+#   Audit (relata)  platform-require-probes      readinessProbe
+#                   platform-restrict-registries imagens só de registries conhecidos
+#
+# Pod privilegiado/hostPath/hostNetwork: Pod Security Admission nativo
+# (label pod-security.kubernetes.io/enforce=baseline, posto pelo apply-project.sh).
+#
+# Relatórios: make policies     Teste sem cluster: make policy-check
+# Detalhes:   docs/14-seguranca.md
+# =============================================================================
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-disallow-latest
+  annotations:
+    policies.kyverno.io/title: Imagem com tag imutável
+    policies.kyverno.io/category: Supply chain
+    policies.kyverno.io/description: >-
+      ":latest" (ou nenhuma tag) muda sem aviso: o mesmo manifesto sobe código
+      diferente e o rollback pelo Git deixa de funcionar. O CI publica sha-<commit>.
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - { key: devops-platform/project, operator: Exists }
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    - name: containers
+      expression: >-
+        object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers : [])
+  validations:
+    # Tag = o que vem depois da última "/" (registry com porta também tem ":").
+    - expression: >-
+        variables.containers.all(c,
+          c.image.substring(c.image.lastIndexOf('/') + 1).contains(':') &&
+          !c.image.endsWith(':latest'))
+      message: >-
+        Use uma tag imutável na imagem (ex.: sha-abc1234), não ":latest" nem
+        imagem sem tag. Veja docs/14-seguranca.md.
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-require-resources
+  annotations:
+    policies.kyverno.io/title: Requests e limit de memória
+    policies.kyverno.io/category: Confiabilidade
+    policies.kyverno.io/description: >-
+      Sem requests o scheduler não sabe onde o pod cabe; sem limit de memória
+      um vazamento derruba o node inteiro.
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - { key: devops-platform/project, operator: Exists }
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          has(c.resources) &&
+          has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests &&
+          has(c.resources.limits) && 'memory' in c.resources.limits)
+      message: >-
+        Todo container precisa de resources.requests.cpu,
+        resources.requests.memory e resources.limits.memory (no chart:
+        `resources:` nos values do app).
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-require-probes
+  annotations:
+    policies.kyverno.io/title: readinessProbe
+    policies.kyverno.io/category: Confiabilidade
+    policies.kyverno.io/description: >-
+      Sem readinessProbe o Service manda tráfego para o pod antes de ele estar
+      pronto (erros 5xx a cada deploy).
+spec:
+  validationActions: [Audit]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - { key: devops-platform/project, operator: Exists }
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  validations:
+    - expression: object.spec.containers.all(c, has(c.readinessProbe))
+      message: Todo container deveria ter readinessProbe.
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-restrict-registries
+  annotations:
+    policies.kyverno.io/title: Registries conhecidos
+    policies.kyverno.io/category: Supply chain
+    policies.kyverno.io/description: >-
+      Imagens só do GHCR, do registry local do k3d ou oficiais do Docker Hub
+      (postgres, redis, rabbitmq...). Em Audit: relata, não recusa.
+spec:
+  validationActions: [Audit]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - { key: devops-platform/project, operator: Exists }
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    - name: containers
+      expression: >-
+        object.spec.containers + (has(object.spec.initContainers) ? object.spec.initContainers : [])
+  validations:
+    - expression: >-
+        variables.containers.all(c,
+          c.image.startsWith('ghcr.io/') ||
+          c.image.startsWith('registry.devops.local:5000/') ||
+          c.image.startsWith('docker.io/library/') ||
+          !c.image.contains('/'))
+      message: >-
+        Imagem fora dos registries conhecidos (ghcr.io, registry.devops.local:5000
+        ou imagem oficial do Docker Hub).

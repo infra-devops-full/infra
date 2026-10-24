@@ -1,4 +1,5 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus alertmanager argocd alerts gen-observability \
+        security trust-ca untrust-ca policies policy-check \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -100,6 +101,32 @@ ghcr: ## Cria ghcr-secret. Uso: make ghcr NAMESPACES="<projeto>-develop <projeto
 	@if [ -z "$(NAMESPACES)" ]; then echo "$(YELLOW)⚠️  Informe NAMESPACES=\"ns1 ns2\"$(RESET)"; exit 1; fi
 	@./create-ghcr-secrets.sh --namespaces "$(NAMESPACES)" $(if $(TOKEN),--token $(TOKEN),)
 
+security: ## Instala/atualiza cert-manager + CA local e Kyverno, e aplica as políticas (cluster existente)
+	@./scripts/setup-security.sh
+	@./scripts/apply-platform.sh
+
+CA_CERT := $(shell eval echo "$${PLATFORM_CA_DIR:-$$HOME/.config/devops-platform/ca}")/platform-ca.crt
+
+trust-ca: ## Confia na CA local no macOS (https://*.local sem aviso). Pede a senha do Mac
+	@test -f "$(CA_CERT)" || { echo "$(RED)✗ $(CA_CERT) não existe — rode make security$(RESET)"; exit 1; }
+	@echo "$(BLUE)→ adicionando a CA ao keychain do sistema (sudo)$(RESET)"
+	@sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$(CA_CERT)"
+	@echo "$(GREEN)✅ CA confiada. Reabra o navegador. (Firefox usa repositório próprio: veja docs/14-seguranca.md)$(RESET)"
+
+untrust-ca: ## Remove a CA local do keychain do macOS
+	@sudo security remove-trusted-cert -d "$(CA_CERT)" 2>/dev/null || true
+	@sudo security delete-certificate -c "DevOps Platform Local CA" /Library/Keychains/System.keychain 2>/dev/null || true
+	@echo "$(GREEN)✅ CA removida do keychain$(RESET)"
+
+policies: ## Violações das políticas do Kyverno nos projetos (PolicyReports)
+	@kubectl get policyreport -A -o json | jq -r '(["NAMESPACE","RECURSO","POLÍTICA","RESULTADO","MENSAGEM"] | @tsv), \
+		(.items[] | .metadata.namespace as $$ns | (.scope.kind + "/" + .scope.name) as $$r \
+		| .results[]? | select(.result != "pass") \
+		| [$$ns, $$r, .policy, .result, (.message | .[0:70])] | @tsv)' | column -t -s $$'\t'
+
+policy-check: ## Testa as políticas do Kyverno contra todos os apps renderizados (sem cluster)
+	@./scripts/policy-check.sh
+
 sealed-secrets: ## Instala o controller do Sealed Secrets + backup/restauração da chave
 	@./scripts/setup-sealed-secrets.sh
 
@@ -177,6 +204,9 @@ LAB_NS := treino
 
 lab-up: ## Treino: instala/restaura o app demo no namespace treino (fora do ArgoCD)
 	@kubectl create namespace $(LAB_NS) --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+	@# O treino fica FORA das políticas de projeto (exercícios 17 e 18 ligam de propósito).
+	@kubectl label namespace $(LAB_NS) devops-platform/project- pod-security.kubernetes.io/enforce- >/dev/null 2>&1 || true
+	@kubectl delete networkpolicy --all -n $(LAB_NS) --ignore-not-found >/dev/null
 	@kubectl -n $(LAB_NS) create secret generic demo-config --from-literal=GREETING=ola \
 		--dry-run=client -o yaml | kubectl apply -f - >/dev/null
 	@# --force-conflicts: o Helm 4 usa server-side apply e recusa sobrescrever campos

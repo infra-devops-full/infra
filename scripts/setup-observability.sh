@@ -48,15 +48,12 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   -f "$CFG/kube-prometheus-stack-values.yaml" \
   --timeout 10m --wait >/dev/null
 
-# hostPort 80/443: maxSurge=0 troca o pod sem disputar as portas (senão trava).
 step "NGINX Ingress: métricas + ServiceMonitor"
 helm upgrade ingress-nginx ingress-nginx/ingress-nginx \
   --version "$(installed_chart_version ingress-nginx kube-system)" \
   --namespace kube-system --reuse-values \
   --set controller.metrics.enabled=true \
   --set controller.metrics.serviceMonitor.enabled=true \
-  --set controller.updateStrategy.rollingUpdate.maxSurge=0 \
-  --set controller.updateStrategy.rollingUpdate.maxUnavailable=1 \
   --timeout 5m --wait >/dev/null
 
 step "ArgoCD: métricas + ServiceMonitor"

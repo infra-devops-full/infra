@@ -6,7 +6,7 @@ NGINX Ingress, ArgoCD, Prometheus e Grafana. Cada aplicação entra como um
 
 > 📚 **Documentação detalhada e treino:** [`docs/`](docs/README.md). Lá estão a
 > arquitetura, GitOps, CI/CD, observabilidade, o mapa dos scripts,
-> troubleshooting, roteiro de estudo e **16 exercícios de "quebre e conserte"**
+> troubleshooting, roteiro de estudo e **18 exercícios de "quebre e conserte"**
 > num laboratório isolado (`make lab-up`).
 
 Tudo fora de `projects/` é genérico e não cita nenhuma aplicação:
@@ -266,10 +266,13 @@ make projects        # projetos, apps e ambientes descobertos
 
 | Ferramenta | URL | Login |
 | ---------- | --- | ----- |
-| ArgoCD | http://argocd.devops.local | `admin` / senha exibida no `make status` |
-| Grafana | http://grafana.devops.local | `admin` / `devops.local2026` |
-| Prometheus | http://prometheus.devops.local | — |
-| AlertManager | http://alertmanager.devops.local | — |
+| ArgoCD | https://argocd.devops.local | `admin` / senha exibida no `make status` |
+| Grafana | https://grafana.devops.local | `admin` / `devops.local2026` |
+| Prometheus | https://prometheus.devops.local | — |
+| AlertManager | https://alertmanager.devops.local | — |
+
+http também responde. Para o navegador não avisar no https, rode
+`make trust-ca` uma vez (ver seção 14).
 
 ## 4. Adicionar um projeto novo (passo a passo)
 
@@ -760,3 +763,22 @@ Por enquanto os alertas só aparecem nas UIs. Para mandar para Discord, Slack
 ou Telegram (com o webhook selado), veja
 [docs/13-alertas-slo.md](docs/13-alertas-slo.md), que também tem os conceitos
 e um runbook por alerta.
+
+## 14. Segurança (HTTPS, rede e políticas)
+
+Todo app com Ingress responde em **https** (cert-manager com uma CA local;
+http continua funcionando). Cada namespace de projeto nasce com
+**default-deny** de rede: outro projeto ou outro ambiente não alcança os
+pods, só o Ingress e o Prometheus. E o cluster **recusa** manifestos
+inseguros ou frágeis (imagem `:latest`, container sem resources, pod
+privilegiado).
+
+```bash
+make trust-ca        # uma vez: o navegador passa a confiar no https://*.local
+make policies        # violações das políticas nos projetos
+make policy-check    # testa todos os apps contra as políticas, sem cluster (roda no CI)
+```
+
+A CA tem backup em `~/.config/devops-platform/ca/`, então recriar o cluster
+não exige confiar de novo. Detalhes, exceções e problemas comuns:
+[docs/14-seguranca.md](docs/14-seguranca.md).

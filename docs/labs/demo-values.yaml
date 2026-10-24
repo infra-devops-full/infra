@@ -11,7 +11,8 @@
 image:
   # Imagem pública e multi-arch do projeto nest-rabbitmq (NestJS, porta 3000).
   repository: ghcr.io/geraldobl58/microservice-with-nestjs-rabbitmq/products
-  tag: latest
+  # Tag imutável (a política platform-disallow-latest recusaria :latest).
+  tag: sha-b0da91a
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

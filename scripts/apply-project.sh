@@ -4,7 +4,8 @@
 # -----------------------------------------------------------------------------
 # Prepara no cluster o que o ArgoCD NÃO cria para um projeto. Idempotente.
 #
-#   1. namespaces <projeto>-<env>     (um por values-<env>.yaml encontrado)
+#   1. namespaces <projeto>-<env>     (um por values-<env>.yaml encontrado), com
+#      os labels que ligam NetworkPolicies/Kyverno e o Pod Security "baseline"
 #   2. SealedSecrets do projeto       (projects/<p>/sealed/<env>/, gerados por
 #                                      `make seal`) → o controller cria os
 #                                      Secrets postgres/rabbitmq/redis/app-secrets
@@ -57,7 +58,16 @@ NAMESPACES="$(project_namespaces "$PROJ" | xargs)"
 step "namespaces: $NAMESPACES"
 for NS in $NAMESPACES; do
   kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  kubectl label namespace "$NS" devops-platform/project="$PROJ" --overwrite >/dev/null
+  # devops-platform/project: o Kyverno gera as NetworkPolicies e aplica as
+  # políticas neste namespace. pod-security: o Kubernetes recusa pods
+  # privilegiados/hostPath/hostNetwork (perfil "baseline") e avisa no apply o
+  # que ainda falta para o perfil "restricted".
+  kubectl label namespace "$NS" --overwrite >/dev/null \
+    devops-platform/project="$PROJ" \
+    pod-security.kubernetes.io/enforce=baseline \
+    pod-security.kubernetes.io/enforce-version=latest \
+    pod-security.kubernetes.io/warn=restricted \
+    pod-security.kubernetes.io/warn-version=latest
 done
 
 # 2. SealedSecrets ------------------------------------------------------------

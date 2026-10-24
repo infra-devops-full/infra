@@ -535,6 +535,104 @@ passam por `pending` antes de `firing`.
 
 ---
 
+## Exercício 17: o vizinho que não deveria entrar (NetworkPolicy)
+
+Transforme o `treino` num namespace "de projeto" e veja o Kyverno gerar as
+NetworkPolicies:
+
+```bash
+kubectl label namespace treino devops-platform/project=lab
+kubectl get networkpolicy -n treino          # em segundos: 4 políticas
+
+# um pod "intruso" em outro namespace tenta chamar o demo direto
+kubectl create namespace intruso
+kubectl run curl -n intruso --rm -it --restart=Never --image=curlimages/curl:8.10.1 -- \
+  curl -s -m 4 -o /dev/null -w '%{http_code}\n' http://demo.treino.svc:3000/
+
+# e pela porta da frente (Ingress)
+curl -s -o /dev/null -w '%{http_code}\n' --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/
+```
+
+**Sintoma observado:** o intruso fica parado e termina com `000` (timeout),
+mas pelo Ingress responde `200`. O pod do demo continua `1/1`.
+
+<details><summary>Dica</summary>
+
+```bash
+kubectl describe networkpolicy -n treino
+```
+Quem está em `from:` de cada uma? Por que o kubelet (probes) não foi
+bloqueado?
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+- `default-deny-ingress` fecha tudo; `allow-same-namespace`,
+  `allow-from-ingress-nginx` e `allow-from-monitoring` abrem só o necessário.
+  O intruso não está em nenhuma delas.
+- Bloqueio por NetworkPolicy aparece como **timeout**, não como
+  "connection refused": o pacote é descartado em silêncio. Esse é o jeito de
+  reconhecer o sintoma.
+- Os probes vêm do próprio node e não passam pela política.
+- Tente `kubectl delete networkpolicy default-deny-ingress -n treino`: o
+  Kyverno recria em segundos (`synchronize`). Política é do Git, não da mão.
+- **Limpeza:** `kubectl delete namespace intruso` e `make lab-up` (tira o
+  label e as políticas do treino).
+- Mais em [14-seguranca.md](14-seguranca.md#2-rede-networkpolicy).
+</details>
+
+---
+
+## Exercício 18: o porteiro (Kyverno e Pod Security)
+
+Com o `treino` marcado como projeto, tente três manifestos ruins:
+
+```bash
+kubectl label namespace treino devops-platform/project=lab \
+  pod-security.kubernetes.io/enforce=baseline --overwrite
+
+# 1. imagem :latest
+kubectl -n treino set image deploy/demo demo=ghcr.io/geraldobl58/microservice-with-nestjs-rabbitmq/products:latest
+
+# 2. Deployment sem resources
+kubectl -n treino create deployment semlimite --image=nginx:1.27
+
+# 3. pod privilegiado
+kubectl -n treino run priv --image=nginx:1.27 \
+  --overrides='{"spec":{"containers":[{"name":"priv","image":"nginx:1.27","securityContext":{"privileged":true}}]}}'
+```
+
+**Sintoma observado:** os três são **recusados na hora**, com
+`admission webhook "vpol.validate.kyverno.svc-fail" denied the request`
+(1 e 2) e `violates PodSecurity "baseline:latest": privileged` (3). Nada é
+criado: `kubectl get pods -n treino` só mostra o demo.
+
+<details><summary>Dica</summary>
+
+```bash
+kubectl get validatingpolicies
+kubectl get namespace treino --show-labels
+make policy-check        # o mesmo veredito, sem cluster
+```
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+- Admissão é o porteiro da API: o objeto é recusado **antes** de existir.
+  Compare com os exercícios 1 a 8, em que o erro só aparecia depois (pod em
+  `ImagePullBackOff`, `OOMKilled`...).
+- 1 e 2 são do **Kyverno** (`platform-disallow-latest`,
+  `platform-require-resources`); 3 é do **Pod Security Admission**, nativo do
+  Kubernetes, ligado por label no namespace.
+- Num projeto real o erro aparece no **sync do ArgoCD** e, antes disso, no
+  `make policy-check` do CI. O ideal é a falha acontecer o mais cedo
+  possível (*shift left*).
+- **Limpeza:** `make lab-up`.
+- Mais em [14-seguranca.md](14-seguranca.md#3-admissão-kyverno-e-pod-security).
+</details>
+
+---
+
 ## Desafio final: o incidente misterioso
 
 Peça para alguém (ou faça você, sem olhar) aplicar **duas** quebras ao mesmo
@@ -563,3 +661,5 @@ Esse formato (sintoma → evidência → causa → correção → prevenção) �
 | HTTP 503 | nenhum pod pronto atrás do Service | `get endpoints` vazio |
 | "minha mudança sumiu" | selfHeal do ArgoCD | o Git é a fonte da verdade |
 | alerta *suppressed* | inibido por outro alerta mais grave do mesmo app | `make alerts`, Alertmanager |
+| timeout entre namespaces, mas o Ingress responde | NetworkPolicy (default-deny) | `kubectl get networkpolicy -n <ns>` |
+| `denied the request` / `violates PodSecurity` no apply | política de admissão (Kyverno / Pod Security) | a própria mensagem; `make policies` |

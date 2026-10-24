@@ -51,7 +51,7 @@ source "$SCRIPT_DIR/lib-project.sh"
 
 # --- Ferramentas -------------------------------------------------------------
 section "Ferramentas"
-for bin in docker k3d kubectl helm yq envsubst kubeseal; do
+for bin in docker k3d kubectl helm yq envsubst kubeseal jq; do
   if command -v "$bin" >/dev/null 2>&1; then ok "$bin"; else err "$bin não encontrado"; hint "brew install $bin"; fi
 done
 if command -v gh >/dev/null 2>&1; then
@@ -177,6 +177,45 @@ for P in $PROJS; do
     else err "$P/$E: sem SealedSecrets em sealed/$E/"; hint "make seal PROJECT=$P && git add projects/$P/sealed"; fi
   done
 done
+
+# --- HTTPS e políticas -------------------------------------------------------
+section "Kubernetes, HTTPS e políticas"
+WANT_K8S="$(sed -nE 's#^image: rancher/k3s:v([0-9]+\.[0-9]+).*#\1#p' "$INFRA_ROOT/config/k3d-config.tmpl.yaml")"
+if HAVE_K8S="$(kubectl version -o json 2>/dev/null | yq -r '.serverVersion.major + "." + (.serverVersion.minor | sub("[^0-9]", ""))' 2>/dev/null)" && [[ -n "$HAVE_K8S" && "$HAVE_K8S" != "." ]]; then
+  if [[ "$HAVE_K8S" == "$WANT_K8S" ]]; then ok "Kubernetes $HAVE_K8S (o mesmo do config/k3d-config.tmpl.yaml)"
+  else warn "cluster em Kubernetes $HAVE_K8S, mas o template pede $WANT_K8S"; hint "recriar: make destroy && make setup (a chave do Sealed Secrets e a CA são restauradas)"; fi
+
+  CA_DIR="$(eval echo "${PLATFORM_CA_DIR:-$HOME/.config/devops-platform/ca}")"
+  if kubectl get clusterissuer platform-ca -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep -q True; then
+    ok "cert-manager: ClusterIssuer platform-ca pronto"
+    if [[ -f "$CA_DIR/platform-ca-secret.yaml" ]]; then ok "backup da CA: $CA_DIR"
+    else warn "sem backup da CA — recriar o cluster gera outra CA e o navegador volta a desconfiar"; hint "make security"; fi
+    if [[ -f "$CA_DIR/platform-ca.crt" ]] && [[ "$(uname)" == "Darwin" ]]; then
+      if security verify-cert -c "$CA_DIR/platform-ca.crt" >/dev/null 2>&1; then ok "a CA é confiada pelo macOS (https sem aviso no navegador)"
+      else warn "a CA não é confiada pelo macOS — o navegador avisa nos https://*.local"; hint "make trust-ca (pede a senha do Mac)"; fi
+    fi
+  else
+    warn "cert-manager/CA não instalados — Ingress sem HTTPS válido"; hint "make security"
+  fi
+
+  if kubectl get deploy -n kyverno kyverno-admission-controller >/dev/null 2>&1; then
+    NPOL="$(kubectl get validatingpolicies,generatingpolicies --no-headers 2>/dev/null | grep -c platform- || true)"
+    if [[ "$NPOL" -ge 5 ]]; then ok "Kyverno: $NPOL políticas da plataforma"
+    else warn "Kyverno sem as políticas da plataforma ($NPOL)"; hint "make apply-argocd"; fi
+    for P in $PROJS; do
+      for E in $(project_envs "$P"); do
+        NS="$P-$E"
+        kubectl get ns "$NS" >/dev/null 2>&1 || continue
+        if kubectl get networkpolicy default-deny-ingress -n "$NS" >/dev/null 2>&1; then ok "$NS: NetworkPolicies e Pod Security ativos"
+        else warn "$NS: sem NetworkPolicies da plataforma"; hint "make project-apply PROJECT=$P (põe os labels do namespace)"; fi
+      done
+    done
+  else
+    warn "Kyverno não instalado — sem NetworkPolicies nem políticas de admissão"; hint "make security && make apply-argocd"
+  fi
+else
+  warn "cluster fora do ar — pulando"
+fi
 
 # --- GitHub ------------------------------------------------------------------
 section "GitHub (repos dos apps)"

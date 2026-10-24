@@ -20,6 +20,9 @@ make helm-lint                     # valida todos os values
 make helm-template PROJECT=<p> APP=<a> ENV=<e>
 make seal PROJECT=<p> [ENV=<e>]   # secrets/<env>.env → sealed/<env>/ (commitar)
 make sealed-secrets                # controller + backup/restauração da chave
+make security                      # cert-manager + CA local, Kyverno e políticas
+make trust-ca | untrust-ca         # navegador confia (ou não) na CA local (sudo)
+make policy-check                  # políticas × todos os apps, sem cluster
 make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
 make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ```
@@ -28,6 +31,7 @@ make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 
 ```bash
 make alerts                        # alertas ativos (Alertmanager)
+make policies                      # violações das políticas (Kyverno)
 make pods [NAMESPACE=<ns>]         # pods dos projetos
 make apps                          # Applications (sync/health)
 make logs     SERVICE=<a> NAMESPACE=<ns>
@@ -87,9 +91,9 @@ curl --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/
 
 | | |
 | - | - |
-| ArgoCD | http://argocd.devops.local (admin / senha no `make status`) |
-| Grafana | http://grafana.devops.local (admin / `devops.local2026`) |
-| Prometheus | http://prometheus.devops.local |
-| Alertmanager | http://alertmanager.devops.local |
+| ArgoCD | https://argocd.devops.local (admin / senha no `make status`) |
+| Grafana | https://grafana.devops.local (admin / `devops.local2026`) |
+| Prometheus | https://prometheus.devops.local |
+| Alertmanager | https://alertmanager.devops.local |
 | crivo | http://develop.crivo.local · http://crivo.local |
 | wlstore | http://develop.wlstore.local · http://wlstore.local |

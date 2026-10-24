@@ -17,6 +17,7 @@ material de estudo e treino.
 | [07-scripts.md](07-scripts.md) | o que cada script e cada comando do Makefile faz, e como se encadeiam |
 | [08-troubleshooting.md](08-troubleshooting.md) | problemas reais que já aconteceram, com causa e solução |
 | [09-cheatsheet.md](09-cheatsheet.md) | comandos `make`, `kubectl` e `git` do dia a dia |
+| [14-seguranca.md](14-seguranca.md) | HTTPS com cert-manager e CA local, NetworkPolicies por namespace, Kyverno e Pod Security, `make policy-check` |
 | [13-alertas-slo.md](13-alertas-slo.md) | SLI/SLO/error budget, alertas multi-burn-rate, Alertmanager (inibição, silêncio, notificação) e runbooks |
 | [12-segredos.md](12-segredos.md) | Sealed Secrets: onde fica cada segredo, `make seal`, rotação, backup da chave e recuperação de desastre |
 
@@ -25,7 +26,7 @@ material de estudo e treino.
 | Doc | Conteúdo |
 | --- | -------- |
 | [10-roteiro-de-estudo.md](10-roteiro-de-estudo.md) | o que estudar e em que ordem, hábitos de operação, roteiro de evolução da plataforma |
-| [11-treino-quebre-e-conserte.md](11-treino-quebre-e-conserte.md) | **16 exercícios práticos** num laboratório isolado (`make lab-up`), com sintomas reais, dicas, soluções e o conceito por trás |
+| [11-treino-quebre-e-conserte.md](11-treino-quebre-e-conserte.md) | **18 exercícios práticos** num laboratório isolado (`make lab-up`), com sintomas reais, dicas, soluções e o conceito por trás |
 
 ## Histórico
 

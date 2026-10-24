@@ -1,0 +1,47 @@
+# =============================================================================
+# CA local da plataforma (cert-manager). Aplicado por scripts/setup-security.sh.
+#
+#   platform-selfsigned  (ClusterIssuer)  só assina a CA abaixo
+#   platform-ca          (Certificate)    a CA: Secret platform-ca em cert-manager
+#   platform-ca          (ClusterIssuer)  emite os certificados dos Ingress
+#                                         (annotation cert-manager.io/cluster-issuer)
+#
+# A chave da CA tem backup em ~/.config/devops-platform/ca/ (fora do Git): ao
+# recriar o cluster ela é restaurada e o navegador continua confiando.
+# Na nuvem, troque o platform-ca por um ClusterIssuer ACME (Let's Encrypt).
+# =============================================================================
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: platform-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: platform-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: DevOps Platform Local CA
+  subject:
+    organizations: [devops-platform]
+  secretName: platform-ca
+  duration: 87600h        # 10 anos: é a raiz do lab
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never # renovar a raiz não pode trocar a chave confiada
+  issuerRef:
+    kind: ClusterIssuer
+    name: platform-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: platform-ca
+spec:
+  ca:
+    secretName: platform-ca

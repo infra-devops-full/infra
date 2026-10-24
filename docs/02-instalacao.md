@@ -27,12 +27,12 @@ make status                # 5. confere
 | Etapa | O que acontece | Script |
 | ----- | -------------- | ------ |
 | 0 | roda o `doctor` e **para** se houver erro (`SKIP_DOCTOR=1` ignora) | `doctor.sh` |
-| 1 | cria o cluster k3d (1 server + `K3D_AGENTS`), com volumes em `DATA_DIR` | `config/k3d-config.tmpl.yaml` |
-| 1.5 | instala o NGINX Ingress (`hostPort` 80/443, métricas ligadas) | `setup.sh` |
-| 2 | namespaces `argocd` e `monitoring` | `setup.sh` |
-| 3 | ArgoCD (sem Dex/notifications) + Ingress `argocd.devops.local` | `setup.sh` |
-| 4 | Prometheus + Grafana enxutos, depois métricas do Ingress, Loki e Alloy | `setup.sh`, `setup-observability.sh` |
-| 5 | para cada projeto: namespaces, dependências e secrets; depois o ArgoCD genérico e os dashboards | `apply-project.sh`, `apply-platform.sh` |
+| 1 | cria o cluster k3d (Kubernetes 1.34, 1 server + `K3D_AGENTS`), com volumes em `DATA_DIR` | `config/k3d-config.tmpl.yaml` |
+| 1.5 | instala o NGINX Ingress (Service `LoadBalancer` via servicelb do k3s, métricas ligadas) | `setup.sh` |
+| 2 | namespaces `argocd` e `monitoring`; cert-manager + CA local (restaurada do backup) e Kyverno | `setup.sh`, `setup-security.sh` |
+| 3 | ArgoCD (sem Dex/notifications) + Ingress `argocd.devops.local` (https) | `setup.sh` |
+| 4 | Prometheus, Alertmanager e Grafana enxutos, métricas do Ingress e do ArgoCD, Loki e Alloy | `setup-observability.sh` |
+| 5 | Sealed Secrets; para cada projeto: namespaces (com labels de rede e Pod Security), segredos e dependências; depois o ArgoCD genérico, dashboards, alertas e políticas | `setup-sealed-secrets.sh`, `apply-project.sh`, `apply-platform.sh` |
 | 6 | bloco isolado no `/etc/hosts` | `hosts.sh` |
 | 7 | testa as URLs das ferramentas | `setup.sh` |
 
@@ -43,6 +43,8 @@ make status                # 5. confere
 | `CLUSTER_NAME` | `devops-lab` | nome do cluster |
 | `K3D_AGENTS` | `1` | nodes além do server (cada um é um k3s inteiro, então mais CPU) |
 | `DATA_DIR` | `$HOME/.devops-lab` | volumes do cluster no disco do Mac |
+| `SEALED_KEYS_DIR` | `~/.config/devops-platform/sealed-secrets` | backup da chave do Sealed Secrets |
+| `PLATFORM_CA_DIR` | `~/.config/devops-platform/ca` | backup da CA local do HTTPS |
 | `INFRA_REPO_URL` / `INFRA_BRANCH` | `git remote` / `main` | repo que o ArgoCD observa |
 | `GITHUB_TOKEN` / `GITHUB_USERNAME` | **vazios** | só para imagens **privadas**: PAT *classic* com `read:packages` |
 

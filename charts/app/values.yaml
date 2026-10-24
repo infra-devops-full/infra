@@ -46,6 +46,16 @@ ingress:
   host: ""
   path: /
   pathType: Prefix
+  # HTTPS: o cert-manager emite o certificado do host (Secret <app>-tls).
+  # No lab o emissor é a CA local (make trust-ca para o navegador confiar);
+  # na nuvem, troque por um ClusterIssuer do Let's Encrypt.
+  tls:
+    enabled: true
+    clusterIssuer: platform-ca
+    secretName: ""        # vazio => <app>-tls
+    # Lab: http e https respondem (curl/CI sem a CA continuam funcionando).
+    # Produção real: true (redireciona para https) e HSTS.
+    sslRedirect: false
 
 resources:
   limits:

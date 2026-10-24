@@ -113,18 +113,14 @@ log_step "ETAPA 1.5/7: NGINX Ingress Controller"
 
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
 helm repo update
-# hostPort 80/443: o pod novo só sobe depois que o antigo libera as portas, por
-# isso maxSurge=0 (sem isso o upgrade trava em "Pending termination").
+# Service LoadBalancer: o servicelb do k3s (pods svclb-*) escuta 80/443 em
+# todo node e encaminha ao controller. Sem hostPort no controller — os dois
+# juntos disputam as portas no node onde o controller roda.
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace kube-system \
   --set controller.publishService.enabled=true \
   --set controller.service.type=LoadBalancer \
   --set controller.watchIngressWithoutClass=true \
-  --set controller.hostPort.enabled=true \
-  --set controller.hostPort.ports.http=80 \
-  --set controller.hostPort.ports.https=443 \
-  --set controller.updateStrategy.rollingUpdate.maxSurge=0 \
-  --set controller.updateStrategy.rollingUpdate.maxUnavailable=1 \
   --set controller.metrics.enabled=true \
   --set 'controller.nodeSelector.kubernetes\.io/os=linux' \
   --timeout 5m --wait
@@ -137,10 +133,15 @@ echo -e "${GREEN}✓ NGINX Ingress Controller instalado${NC}"
 # ==============================================================================
 # ETAPA 2: Namespaces de infra
 # ==============================================================================
-log_step "ETAPA 2/7: Namespaces de infra"
+log_step "ETAPA 2/7: Namespaces de infra, HTTPS e políticas"
 
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+
+# cert-manager + CA local (HTTPS dos Ingress) e Kyverno (políticas e
+# NetworkPolicies dos projetos). Antes do ArgoCD/Grafana, cujos Ingress já
+# pedem certificado.
+bash "$SCRIPT_DIR/scripts/setup-security.sh"
 
 # ==============================================================================
 # ETAPA 3: ArgoCD
@@ -174,8 +175,14 @@ metadata:
   namespace: argocd
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    cert-manager.io/cluster-issuer: platform-ca
+    cert-manager.io/usages: "digital signature,key encipherment,server auth"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   ingressClassName: nginx
+  tls:
+  - hosts: [argocd.devops.local]
+    secretName: argocd-server-tls
   rules:
   - host: argocd.devops.local
     http:
@@ -254,11 +261,16 @@ done
 echo ""
 echo -e "${GREEN}✨  SETUP CONCLUÍDO  ✨${NC}"
 echo ""
-echo -e "  🎯 ArgoCD       → http://argocd.devops.local   (admin / $ARGOCD_PASSWORD)"
-echo -e "  📊 Grafana      → http://grafana.devops.local   (admin / devops.local2026)"
-echo -e "  🔍 Prometheus   → http://prometheus.devops.local"
-echo -e "  🚨 AlertManager → http://alertmanager.devops.local"
+echo -e "  🎯 ArgoCD       → https://argocd.devops.local   (admin / $ARGOCD_PASSWORD)"
+echo -e "  📊 Grafana      → https://grafana.devops.local   (admin / devops.local2026)"
+echo -e "  🔍 Prometheus   → https://prometheus.devops.local"
+echo -e "  🚨 AlertManager → https://alertmanager.devops.local"
 echo ""
+CA_CERT_FILE="$(eval echo "${PLATFORM_CA_DIR:-$HOME/.config/devops-platform/ca}")/platform-ca.crt"
+if [[ "$(uname)" == "Darwin" ]] && ! security verify-cert -c "$CA_CERT_FILE" >/dev/null 2>&1; then
+    echo -e "${YELLOW}🔒 Para o navegador confiar no https://*.local: make trust-ca${NC} (uma vez; http continua funcionando)"
+    echo ""
+fi
 echo -e "${CYAN}Projetos aplicados:${NC} $(project_names | paste -sd ', ' -)"
 echo -e "${CYAN}Próximos passos:${NC} make status | k9s | make destroy"
 echo ""

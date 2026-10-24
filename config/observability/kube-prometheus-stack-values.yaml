@@ -44,8 +44,15 @@ prometheus:
   ingress:
     enabled: true
     ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: platform-ca
+      cert-manager.io/usages: "digital signature,key encipherment,server auth"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
     hosts: [prometheus.devops.local]
     paths: [/]
+    tls:
+      - secretName: prometheus-tls
+        hosts: [prometheus.devops.local]
 
 grafana:
   adminPassword: "devops.local2026"
@@ -61,16 +68,30 @@ grafana:
   ingress:
     enabled: true
     ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: platform-ca
+      cert-manager.io/usages: "digital signature,key encipherment,server auth"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
     hosts: [grafana.devops.local]
     path: /
+    tls:
+      - secretName: grafana-tls
+        hosts: [grafana.devops.local]
 
 alertmanager:
   enabled: true
   ingress:
     enabled: true
     ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: platform-ca
+      cert-manager.io/usages: "digital signature,key encipherment,server auth"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
     hosts: [alertmanager.devops.local]
     paths: [/]
+    tls:
+      - secretName: alertmanager-tls
+        hosts: [alertmanager.devops.local]
   # Por enquanto os alertas só aparecem na UI (alertmanager.devops.local e o
   # painel "Platform / SLOs" no Grafana): o receiver "null" não envia nada.
   # Para notificar (Discord, Slack, Telegram...) veja docs/13-alertas-slo.md:

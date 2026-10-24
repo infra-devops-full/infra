@@ -158,6 +158,10 @@ SEALED_KEYS_DIR="$(eval echo "${SEALED_KEYS_DIR:-$HOME/.config/devops-platform/s
 if [ -f "$SEALED_KEYS_DIR/keys.yaml" ]; then
     echo -e "${BLUE}🔑 Chave do Sealed Secrets preservada em $SEALED_KEYS_DIR (restaurada no próximo make setup)${NC}"
 fi
+PLATFORM_CA_DIR="$(eval echo "${PLATFORM_CA_DIR:-$HOME/.config/devops-platform/ca}")"
+if [ -f "$PLATFORM_CA_DIR/platform-ca-secret.yaml" ]; then
+    echo -e "${BLUE}🔒 CA local preservada em $PLATFORM_CA_DIR (restaurada no próximo make setup; o navegador continua confiando)${NC}"
+fi
 
 echo ""
 

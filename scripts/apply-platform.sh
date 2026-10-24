@@ -36,8 +36,22 @@ if [[ -z "$INFRA_REPO_URL" ]]; then
   exit 1
 fi
 
+CHECK_KINDS=false
+
+# O cluster conhece todos os kinds do arquivo? (CRDs do Kyverno, cert-manager,
+# Prometheus Operator...). Evita que um componente ainda não instalado faça o
+# apply inteiro falhar.
+kinds_available() {
+  local gv kind
+  while IFS=' ' read -r gv kind; do
+    [[ -z "$kind" ]] && continue
+    kubectl api-resources --api-group="$(sed -E 's#/?v[0-9]+[a-z0-9]*$##' <<<"$gv")" -o name 2>/dev/null \
+      | grep -qi "^$(tr '[:upper:]' '[:lower:]' <<<"$kind")" || { echo "$gv/$kind"; return 1; }
+  done < <(yq -N 'select(.kind != null) | .apiVersion + " " + .kind' "$1" | sort -u)
+}
+
 render() {
-  local f
+  local f missing
   for f in "$INFRA_ROOT"/argocd/*.yaml; do
     echo "---"
     envsubst '${INFRA_REPO_URL} ${INFRA_BRANCH}' < "$f"
@@ -45,6 +59,10 @@ render() {
   # Só ${INFRA_RAW_URL} é substituído: as variáveis do Grafana ($app,
   # ${project}...) passam intactas.
   for f in "$INFRA_ROOT"/k8s/*.yaml; do
+    if $CHECK_KINDS && ! missing="$(kinds_available "$f")"; then
+      echo "⚠ pulando k8s/$(basename "$f"): o cluster não conhece $missing (rode make security / make observability)" >&2
+      continue
+    fi
     echo "---"
     envsubst '${INFRA_RAW_URL}' < "$f"
   done
@@ -56,5 +74,6 @@ if [[ "${1:-}" == "--render" ]]; then
 fi
 
 echo "▸ ArgoCD observando $INFRA_REPO_URL ($INFRA_BRANCH)"
+CHECK_KINDS=true
 render | kubectl apply -f -
 echo "✅ Plataforma aplicada (argocd/ + k8s/)"

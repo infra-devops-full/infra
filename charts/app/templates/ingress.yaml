@@ -1,17 +1,33 @@
 {{- $host := include "app.ingressHost" . -}}
 {{- if and .Values.ingress.enabled $host -}}
+{{- $tls := .Values.ingress.tls -}}
+{{- $annotations := deepCopy (.Values.ingress.annotations | default dict) -}}
+{{- if $tls.enabled -}}
+{{- if $tls.clusterIssuer -}}
+{{- $_ := set $annotations "cert-manager.io/cluster-issuer" $tls.clusterIssuer -}}
+{{- /* serverAuth: macOS/iOS recusam certificado TLS sem esse uso */ -}}
+{{- $_ := set $annotations "cert-manager.io/usages" "digital signature,key encipherment,server auth" -}}
+{{- end -}}
+{{- $_ := set $annotations "nginx.ingress.kubernetes.io/ssl-redirect" (ternary "true" "false" (eq (toString $tls.sslRedirect) "true")) -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "app.fullname" . }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- with $annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if $tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ $tls.secretName | default (printf "%s-tls" (include "app.fullname" .)) }}
+  {{- end }}
   rules:
     - host: {{ $host | quote }}
       http:

@@ -10,7 +10,9 @@ saber onde olhar quando algo der errado.
 make setup
   └─ setup.sh
        ├─ doctor.sh                       confere antes de começar
-       ├─ (k3d, ingress, argocd — dentro do setup.sh)
+       ├─ (k3d, ingress — dentro do setup.sh)
+       ├─ setup-security.sh               cert-manager + CA local, Kyverno
+       ├─ (argocd — dentro do setup.sh)
        ├─ setup-observability.sh          Prometheus/Alertmanager/Grafana, métricas, Loki, Alloy
        ├─ setup-sealed-secrets.sh         controller + restaura/backup da chave
        ├─ apply-project.sh  (por projeto)
@@ -32,6 +34,8 @@ lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts 
 | `setup-observability.sh` | kube-prometheus-stack (values em `config/observability/`), métricas do Ingress e do ArgoCD, Loki, Alloy | `make observability` |
 | `dev/gen-prometheus-rules.py`, `dev/gen-dashboard-slo.py` | gerar `k8s/prometheus-rules-apps.yaml` e o dashboard de SLO (edite os geradores, não o YAML) | `make gen-observability` |
 | `apply-project.sh` | preparar o que o ArgoCD **não** cria: namespaces, SealedSecrets (antes das dependências), bancos, filas | `make project-apply` |
+| `setup-security.sh` | cert-manager + CA local (backup/restauração da CA) e Kyverno | `make security` |
+| `policy-check.sh` | testar as políticas do Kyverno contra todos os apps renderizados, sem cluster | `make policy-check` |
 | `setup-sealed-secrets.sh` | instalar o controller do Sealed Secrets e fazer backup/restauração da chave | `make sealed-secrets` |
 | `seal-secrets.sh` | `secrets/<env>.env` → `sealed/<env>/*.yaml` (gera senhas de infra que faltarem) | `make seal` |
 | `setup-postgres.sh` | Postgres num namespace, com credenciais do Secret `postgres` | `make postgres` |
@@ -48,10 +52,10 @@ Todos são **idempotentes**: rodar de novo não quebra nada, só reconcilia.
 
 | Frequência | Comandos |
 | ---------- | -------- |
-| **todo dia** | `status`, `alerts`, `pods`, `apps`, `logs`, `describe`, `events` |
+| **todo dia** | `status`, `alerts`, `policies`, `pods`, `apps`, `logs`, `describe`, `events` |
 | **quando algo muda** | `project-apply`, `seal`, `rollout`, `refresh`, `hosts`, `doctor` |
-| **raramente** | `setup`, `destroy`, `start`, `stop`, `github`, `observability`, `sealed-secrets`, `apply-argocd`, `postgres`, `ghcr` |
-| **validar antes do commit** | `helm-lint`, `helm-template`, `render-platform`, `gen-observability`, `projects` |
+| **raramente** | `setup`, `destroy`, `start`, `stop`, `github`, `observability`, `security`, `trust-ca`, `sealed-secrets`, `apply-argocd`, `postgres`, `ghcr` |
+| **validar antes do commit** | `helm-lint`, `helm-template`, `render-platform`, `gen-observability`, `policy-check`, `projects` |
 | **acesso** | `shell`, `pf`, `grafana`, `argocd`, `prometheus`, `alertmanager`, `k9s` |
 | **treino** | `lab-up`, `lab-status`, `lab-down` |
 

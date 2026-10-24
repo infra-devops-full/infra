@@ -1,0 +1,36 @@
+# =============================================================================
+# Kyverno — values do lab. Aplicado por scripts/setup-security.sh.
+# Políticas: k8s/kyverno-*.yaml (apply-platform.sh).
+# =============================================================================
+
+config:
+  # Os webhooks do Kyverno só olham namespaces de PROJETO (label
+  # devops-platform/project, posto pelo apply-project.sh). A plataforma
+  # (kube-system, argocd, monitoring...) nunca é bloqueada, nem se o Kyverno
+  # cair (os webhooks falham fechado só para os projetos).
+  webhooks:
+    namespaceSelector:
+      matchExpressions:
+        - key: devops-platform/project
+          operator: Exists
+
+# 1 réplica de cada controller: lab. Em produção, 3 do admission controller.
+admissionController:
+  replicas: 1
+  container:
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits:   { memory: 384Mi }
+backgroundController:
+  replicas: 1
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits:   { memory: 192Mi }
+reportsController:
+  replicas: 1
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits:   { memory: 192Mi }
+# Limpeza agendada (CleanupPolicy) não é usada.
+cleanupController:
+  enabled: false

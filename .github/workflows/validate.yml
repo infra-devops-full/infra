@@ -5,6 +5,7 @@
 #   helm-lint     charts/app contra cada projects/<p>/apps/<app>/values-<env>.yaml
 #   render        argocd/ + k8s/ renderizam e são YAML válido
 #   alertas       k8s/ gerado está atualizado e as regras passam no promtool
+#   políticas     todo app renderizado passa nas políticas do Kyverno
 #   shellcheck    scripts da plataforma
 #   actionlint    templates de workflow entregues aos repos dos apps
 # =============================================================================
@@ -45,6 +46,9 @@ jobs:
           yq '.spec' k8s/prometheus-rules-apps.yaml > /tmp/rules.yaml
           docker run --rm -v /tmp:/w --entrypoint promtool prom/prometheus:v3.5.0 \
             check rules /w/rules.yaml
+
+      - name: Políticas do Kyverno (todos os apps × ambientes)
+        run: make policy-check
 
       - name: ShellCheck
         run: shellcheck -S error setup.sh destroy.sh status.sh create-ghcr-secrets.sh scripts/*.sh
