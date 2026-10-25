@@ -1,5 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
-  tag: sha-abe98d1
+  tag: sha-92185d2
 ingress:
   host: wlstore.local # domínio do projeto em prod: o front responde em /
