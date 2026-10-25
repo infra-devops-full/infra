@@ -1,8 +1,3 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
-# repository: o repo saiu de geraldobl58/wlstore para whitelabel-store/wlstore-be
-# e o CI publica no endereço novo. Só o develop aponta para ele por enquanto: o
-# prod continua na imagem antiga até a promoção para a main (aí a linha sobe
-# para o values.yaml).
 image:
-  repository: ghcr.io/whitelabel-store/wlstore-be/pricing-service
   tag: sha-165281b

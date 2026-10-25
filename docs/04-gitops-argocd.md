@@ -31,8 +31,8 @@ projects/wlstore/apps/catalog-service/values-develop.yaml
 ```
 
 O nome da Application é `<app>-<env>`. Ele ganha o prefixo `<projeto>-` quando
-o app não começa com o nome do projeto (`crivo-be-develop`,
-`wlstore-vitrine-mfe-develop`).
+o app não começa com o nome do projeto: `crivo-be-develop` e `wlstore-fe-develop`
+ficam como estão; `catalog-service` vira `wlstore-catalog-service-develop`.
 
 Por isso **adicionar app ou ambiente não exige mexer no ArgoCD**: basta
 commitar o arquivo.

@@ -1,0 +1,36 @@
+# wlstore-fe (Next.js) — o front da WLStore. Valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+#
+# Um app só, com três áreas: loja (/), painel do lojista (/painel) e checkout
+# (/checkout). Responde em "/" do host do projeto (ingress.host nos
+# values-<env>.yaml). Repo: github.com/whitelabel-store/wlstore-fe.
+
+image:
+  # Publicada pelo CI do repo wlstore-fe.
+  repository: ghcr.io/whitelabel-store/wlstore-fe/wlstore-fe
+  pullPolicy: IfNotPresent
+
+service:
+  port: 3000
+
+# Probes numa página estática, que não chama o backend: catalog-service fora do
+# ar não deve derrubar o front (a home é dinâmica e depende dele).
+livenessProbe:
+  path: /checkout/carrinho
+readinessProbe:
+  path: /checkout/carrinho
+
+# Lidas em runtime pelo servidor Next (Server Actions): a imagem é a mesma em
+# todos os ambientes. O backend é chamado pela rede interna do namespace.
+env:
+  CATALOG_API_URL: "http://catalog-service:8081"
+  PRICING_API_URL: "http://pricing-service:8082"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 384Mi
+  requests:
+    cpu: 20m
+    memory: 128Mi

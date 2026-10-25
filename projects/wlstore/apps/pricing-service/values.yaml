@@ -3,8 +3,8 @@
 # (a partir do caminho deste arquivo).
 
 image:
-  # Publicada pelo CI do repo wlstore: wlstore-be/Dockerfile com SERVICE=pricing-service.
-  repository: ghcr.io/geraldobl58/wlstore/pricing-service
+  # Publicada pelo CI do repo whitelabel-store/wlstore-be: Dockerfile da raiz com SERVICE=pricing-service.
+  repository: ghcr.io/whitelabel-store/wlstore-be/pricing-service
   pullPolicy: IfNotPresent
 
 service:

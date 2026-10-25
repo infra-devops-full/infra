@@ -4,18 +4,15 @@
 # Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
 #   apps/catalog-service/  Spring Boot (porta 8081, banco catalogdb, Flyway)
 #   apps/pricing-service/  Spring Boot (porta 8082, banco pricingdb, Flyway)
-#   apps/vitrine-mfe/      Next.js, a loja (porta 3000, em / do host do projeto)
-#   apps/painel-mfe/       Next.js, painel do lojista (porta 4300, em /painel)
-#   apps/checkout-mfe/     Next.js, checkout (porta 4400, em /checkout)
-# Os microfrontends se dividem por área do produto, não por serviço: a vitrine
-# usa catalog-service (e o preço que ele copia do pricing por evento).
+#   apps/wlstore-fe/       Next.js (porta 3000, em / do host do projeto): loja em /,
+#                          painel do lojista em /painel e checkout em /checkout
 # catalog ↔ pricing trocam eventos pelo RabbitMQ (catalog.events / pricing.events).
 # → namespaces wlstore-develop / wlstore-prod
-# → front: <env>.wlstore.local (vitrine em /, outros apps no basePath — Next.js Multi-Zones)
+# → front: <env>.wlstore.local
 # → APIs: <env>.<app>.wlstore.local
 #
 # Migração em andamento: shell, catalog-mfe e pricing-mfe (monorepo antigo)
-# só existem no prod, até a promoção dos apps novos para a main.
+# só existem no prod, até a promoção do wlstore-fe para a main.
 #
 # Serviços ainda não implementados (identity, inventory, notification, order,
 # payment, discovery-server) ficam de fora: para incluir um, crie
@@ -23,15 +20,13 @@
 # =============================================================================
 
 # Texto do projeto na UI do ArgoCD (AppProject).
-description: "WLStore — e-commerce whitelabel: vitrine, painel e checkout (Next.js) + catalog e pricing (Spring)"
+description: "WLStore — e-commerce whitelabel: front Next.js (loja, painel, checkout) + catalog e pricing (Spring)"
 
 # Repos de código (um por app/time; quem builda é o CI de cada um). Usados
 # pelo `make github` (develop, deploy key, proteção da main) e pelo doctor.
 appRepos:
-  - https://github.com/whitelabel-store/wlstore-be        # catalog-service, pricing-service
-  - https://github.com/whitelabel-store/wlstore-vitrine   # vitrine-mfe
-  - https://github.com/whitelabel-store/wlstore-painel    # painel-mfe
-  - https://github.com/whitelabel-store/wlstore-checkout  # checkout-mfe
+  - https://github.com/whitelabel-store/wlstore-be   # catalog-service, pricing-service
+  - https://github.com/whitelabel-store/wlstore-fe   # wlstore-fe
 
 # Um Postgres por ambiente, um banco por serviço (database per service).
 # → Secret `postgres` com DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, JDBC_URL...
