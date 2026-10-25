@@ -1,8 +1,11 @@
 # DevOps Platform
 
+<p align="center"><img src="docs/media/infra-lab.svg" alt="Do git push à produção: CI, GitOps com ArgoCD, Kyverno, canary com Argo Rollouts e observabilidade" width="720"></p>
+
 Plataforma **genérica** de Kubernetes local com GitOps. Um cluster k3d com
-NGINX Ingress, ArgoCD, Prometheus e Grafana. Cada aplicação entra como um
-**projeto** em `projects/<nome>/` com o mínimo de arquivos.
+NGINX Ingress, ArgoCD, Argo Rollouts, cert-manager, Kyverno, Prometheus,
+Grafana e Loki. Cada aplicação entra como um **projeto** em
+`projects/<nome>/` com o mínimo de arquivos.
 
 > 📚 **Documentação detalhada e treino:** [`docs/`](docs/README.md). Lá estão a
 > arquitetura, GitOps, CI/CD, observabilidade, o mapa dos scripts,

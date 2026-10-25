@@ -47,12 +47,21 @@ done
 cp k8s/kyverno-pod-policies.yaml "$WORK/policies.yaml"
 
 echo "▸ Kyverno CLI: $(find "$WORK/resources" -name '*.yaml' | wc -l | tr -d ' ') apps renderizados × políticas"
-# Sai com código != 0 quando há violação: quem decide é a análise abaixo.
-docker run --rm -v "$WORK:/w" "$KYVERNO_CLI_IMAGE" apply /w/policies.yaml \
-  --resource /w/resources --values-file /w/values.yaml --policy-report \
-  2>/dev/null | sed -n '/^apiVersion:/,$p' > "$WORK/report.yaml" || true
+# O CLI roda como UID 65532: no Linux (runner do CI) ele precisa poder ler a
+# pasta do mktemp, que nasce 700.
+chmod -R a+rX "$WORK"
 
-[[ -s "$WORK/report.yaml" ]] || { echo "❌ o Kyverno CLI não gerou relatório"; exit 1; }
+# Sai com código != 0 quando há violação: quem decide é a análise abaixo.
+docker run --rm -v "$WORK:/w:ro" "$KYVERNO_CLI_IMAGE" apply /w/policies.yaml \
+  --resource /w/resources --values-file /w/values.yaml --policy-report \
+  > "$WORK/cli.out" 2> "$WORK/cli.err" || true
+sed -n '/^apiVersion:/,$p' "$WORK/cli.out" > "$WORK/report.yaml"
+
+if [[ ! -s "$WORK/report.yaml" ]]; then
+  echo "❌ o Kyverno CLI não gerou relatório:"
+  grep -v 'is deprecated' "$WORK/cli.err" "$WORK/cli.out" | tail -20
+  exit 1
+fi
 
 # Uma linha por violação: resultado, política, recurso.
 yq -r '.results[] | select(.result == "fail" or .result == "warn" or .result == "error")

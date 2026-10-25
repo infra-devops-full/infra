@@ -33,13 +33,14 @@ step() { echo -e "\033[0;36m▸ $1\033[0m"; }
 # Versão do chart já instalado: o --reuse-values só liga flags, sem trocar a
 # versão do Ingress/ArgoCD por baixo dos panos.
 installed_chart_version() {
-  helm list -n "$2" -f "^$1\$" -o json | jq -r '.[0].chart // empty' | sed -E 's/^.*-([0-9]+\.[0-9]+\.[0-9]+.*)$/\1/'
+  helm list -n "$2" -f "^$1\$" -o json | jq -r '.[0].chart // empty' | sed -E 's/^.*-(v?[0-9]+\.[0-9]+\.[0-9]+.*)$/\1/'
 }
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
 helm repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
-helm repo update prometheus-community grafana ingress-nginx argo >/dev/null
+helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
+helm repo update prometheus-community grafana ingress-nginx argo jetstack >/dev/null
 
 step "kube-prometheus-stack $KPS_CHART_VERSION (Prometheus, Alertmanager, Grafana)"
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -62,7 +63,24 @@ helm upgrade argocd argo/argo-cd \
   --namespace argocd --reuse-values \
   --set controller.metrics.enabled=true \
   --set controller.metrics.serviceMonitor.enabled=true \
+  --set server.metrics.enabled=true \
+  --set server.metrics.serviceMonitor.enabled=true \
+  --set repoServer.metrics.enabled=true \
+  --set repoServer.metrics.serviceMonitor.enabled=true \
   --timeout 5m --wait >/dev/null
+
+# Validade dos certificados (painel "Certificados vencendo" do Início). O
+# cert-manager sobe antes do Prometheus (setup-security.sh); o ServiceMonitor
+# só pode ser criado agora.
+if helm status cert-manager -n cert-manager >/dev/null 2>&1; then
+  step "cert-manager: ServiceMonitor"
+  helm upgrade cert-manager jetstack/cert-manager \
+    --version "$(installed_chart_version cert-manager cert-manager)" \
+    --namespace cert-manager --reuse-values \
+    --set prometheus.enabled=true \
+    --set prometheus.servicemonitor.enabled=true \
+    --timeout 5m --wait >/dev/null
+fi
 
 step "Loki $LOKI_CHART_VERSION (single-binary)"
 helm upgrade --install loki grafana/loki --version "$LOKI_CHART_VERSION" \

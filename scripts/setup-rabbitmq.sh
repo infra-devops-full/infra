@@ -5,7 +5,8 @@
 # Cria RabbitMQ (com management UI) em um namespace. Usuário e senha vêm do
 # Secret `rabbitmq` (RABBITMQ_URL, RABBITMQ_HOST, RABBITMQ_PORT, RABBITMQ_USER,
 # RABBITMQ_PASSWORD), criado a partir do SealedSecret do projeto (`make seal`).
-#   - Service rabbitmq (5672 AMQP, 15672 management)
+#   - Service rabbitmq (5672 AMQP, 15672 management, 15692 métricas Prometheus)
+#   - ServiceMonitor (dashboard "Infra / RabbitMQ" no Grafana)
 #   - Deployment rabbitmq com emptyDir (volátil — mesmo trade-off do Postgres)
 #
 # As apps consomem a conexão via envFrom: [{ secretRef: rabbitmq }].
@@ -58,9 +59,33 @@ spec:
     - name: management
       port: 15672
       targetPort: 15672
+    - name: metrics
+      port: 15692
+      targetPort: 15692
   selector:
     app: rabbitmq
 EOF
+
+# Métricas do plugin rabbitmq_prometheus (já ligado na imagem oficial). Só se
+# o Prometheus Operator existir (CRD do kube-prometheus-stack).
+if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+cat <<EOF | kubectl apply -f -
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq
+  namespace: ${NS}
+  labels:
+    app: rabbitmq
+spec:
+  selector:
+    matchLabels:
+      app: rabbitmq
+  endpoints:
+    - port: metrics
+      interval: 60s
+EOF
+fi
 
 cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
@@ -95,6 +120,7 @@ spec:
           ports:
             - containerPort: 5672
             - containerPort: 15672
+            - containerPort: 15692
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]

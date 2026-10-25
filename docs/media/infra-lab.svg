@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title>DevOps Platform · Lab — do git push à produção</title>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0B1020"/><stop offset="1" stop-color="#141034"/></linearGradient>
+  <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#3B5BDB"/><stop offset="1" stop-color="#7048E8"/></linearGradient>
+  <linearGradient id="loop" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#63E6BE"/><stop offset="1" stop-color="#FFD43B"/></linearGradient>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="1080" height="1080" fill="url(#bg)"/>
+<g transform="translate(60,52)"><rect width="76" height="76" rx="18" fill="url(#logo)"/><polygon points="38,12 61,25 61,51 38,64 15,51 15,25" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="4" stroke-linejoin="round"/><path d="M25 38 C25 30,33 30,38 38 S51 46,51 38 S43 30,38 38 S25 46,25 38 Z" fill="none" stroke="url(#loop)" stroke-width="4" stroke-linecap="round"/></g>
+<text x="156" y="88" fill="#E8EBF7" font-size="40" font-weight="750">DevOps Platform · Lab</text>
+<text x="156" y="120" fill="#8E97B8" font-size="19">Do git push à produção: GitOps em Kubernetes local (k3d no Mac)</text>
+<text x="60" y="190" fill="#8E97B8" font-size="14" letter-spacing="2">1 · CI (GITHUB ACTIONS)</text>
+<g transform="translate(60,205)">
+<rect width="160" height="96" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="160" height="96" rx="16" fill="#6C7CFF" fill-opacity="0.10" stroke="#6C7CFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.0286;0.0536;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="57.0" font-size="26">⌨️</text>
+<text x="56" y="44.0" fill="#E8EBF7" font-size="19" font-weight="650">git push</text>
+<text x="56" y="68.0" fill="#8E97B8" font-size="14.5">develop/main</text>
+</g>
+<g transform="translate(260,205)">
+<rect width="160" height="96" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="160" height="96" rx="16" fill="#6C7CFF" fill-opacity="0.10" stroke="#6C7CFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.1000;0.1250;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="57.0" font-size="26">🧪</text>
+<text x="56" y="44.0" fill="#E8EBF7" font-size="19" font-weight="650">Testes</text>
+<text x="56" y="68.0" fill="#8E97B8" font-size="14.5">lint + testes</text>
+</g>
+<g transform="translate(460,205)">
+<rect width="160" height="96" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="160" height="96" rx="16" fill="#6C7CFF" fill-opacity="0.10" stroke="#6C7CFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.1714;0.1964;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="57.0" font-size="26">🛡️</text>
+<text x="56" y="44.0" fill="#E8EBF7" font-size="19" font-weight="650">Segurança</text>
+<text x="56" y="68.0" fill="#8E97B8" font-size="14.5">Trivy + CodeQL</text>
+</g>
+<g transform="translate(660,205)">
+<rect width="160" height="96" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="160" height="96" rx="16" fill="#6C7CFF" fill-opacity="0.10" stroke="#6C7CFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.2429;0.2679;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="57.0" font-size="26">📦</text>
+<text x="56" y="44.0" fill="#E8EBF7" font-size="19" font-weight="650">Imagem</text>
+<text x="56" y="68.0" fill="#8E97B8" font-size="14.5">GHCR, multi-arch</text>
+</g>
+<g transform="translate(860,205)">
+<rect width="160" height="96" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="160" height="96" rx="16" fill="#6C7CFF" fill-opacity="0.10" stroke="#6C7CFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.3143;0.3393;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="57.0" font-size="26">📝</text>
+<text x="56" y="44.0" fill="#E8EBF7" font-size="19" font-weight="650">GitOps</text>
+<text x="56" y="68.0" fill="#8E97B8" font-size="14.5">tag no Git</text>
+</g>
+<path d="M220 253 L260 253" fill="none" stroke="#2A3358" stroke-width="2.5" stroke-dasharray="6 7"/>
+<path d="M220 253 L260 253" fill="none" stroke="#FFC94D" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.0714;0.0857;0.9643;0.9786;1.0000"/></path>
+<path d="M420 253 L460 253" fill="none" stroke="#2A3358" stroke-width="2.5" stroke-dasharray="6 7"/>
+<path d="M420 253 L460 253" fill="none" stroke="#FFC94D" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.1429;0.1571;0.9643;0.9786;1.0000"/></path>
+<path d="M620 253 L660 253" fill="none" stroke="#2A3358" stroke-width="2.5" stroke-dasharray="6 7"/>
+<path d="M620 253 L660 253" fill="none" stroke="#FFC94D" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.2143;0.2286;0.9643;0.9786;1.0000"/></path>
+<path d="M820 253 L860 253" fill="none" stroke="#2A3358" stroke-width="2.5" stroke-dasharray="6 7"/>
+<path d="M820 253 L860 253" fill="none" stroke="#FFC94D" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.2857;0.3000;0.9643;0.9786;1.0000"/></path>
+<circle r="8" fill="#FFC94D" opacity="0" filter="url(#glow)"><animateMotion dur="14.0s" repeatCount="indefinite" path="M140 253 L940 253" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0.0000;0.0286;0.3143;1.0000"/><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0.0000;0.0286;0.0357;0.3107;0.3214;1.0000"/></circle>
+<g transform="translate(408,213)" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.1357;0.1607;0.9643;0.9893;1.0000"/><circle r="13" fill="#3DDC97"/><path d="M-5.8500000000000005 0 l3.9 4.16 l7.15 -8.06" fill="none" stroke="#0B1020" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(608,213)" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.2071;0.2321;0.9643;0.9893;1.0000"/><circle r="13" fill="#3DDC97"/><path d="M-5.8500000000000005 0 l3.9 4.16 l7.15 -8.06" fill="none" stroke="#0B1020" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<path d="M940 301 L940 352 L590 352 L590 392" fill="none" stroke="#2A3358" stroke-width="2.5" stroke-dasharray="6 7"/>
+<path d="M940 301 L940 352 L590 352 L590 392" fill="none" stroke="#FFC94D" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.3286;0.3429;0.9643;0.9786;1.0000"/></path>
+<circle r="8" fill="#FFC94D" opacity="0" filter="url(#glow)"><animateMotion dur="14.0s" repeatCount="indefinite" path="M940 301 L940 352 L590 352 L590 392" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0.0000;0.3286;0.3786;1.0000"/><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0.0000;0.3286;0.3357;0.3750;0.3857;1.0000"/></circle>
+<rect x="40" y="392" width="1000" height="470" rx="26" fill="#0E1430" stroke="#6C7CFF" stroke-opacity=".55" stroke-width="2"/>
+<text x="64" y="428" fill="#8E97B8" font-size="14" letter-spacing="2">2 · CLUSTER K3D · KUBERNETES 1.34</text>
+<g transform="translate(64,446)">
+<rect width="230" height="92" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="230" height="92" rx="16" fill="#A27BFF" fill-opacity="0.10" stroke="#A27BFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.3786;0.4036;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="55.0" font-size="26">🐙</text>
+<text x="56" y="42.0" fill="#E8EBF7" font-size="19" font-weight="650">ArgoCD</text>
+<text x="56" y="66.0" fill="#8E97B8" font-size="14.5">Git é a fonte da verdade</text>
+</g>
+<g transform="translate(318,446)">
+<rect width="230" height="92" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="230" height="92" rx="16" fill="#A27BFF" fill-opacity="0.10" stroke="#A27BFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.4214;0.4464;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="55.0" font-size="26">🚦</text>
+<text x="56" y="42.0" fill="#E8EBF7" font-size="19" font-weight="650">Kyverno</text>
+<text x="56" y="66.0" fill="#8E97B8" font-size="14.5">admissão: tag, limites</text>
+</g>
+<g transform="translate(572,446)">
+<rect width="220" height="92" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="220" height="92" rx="16" fill="#A27BFF" fill-opacity="0.10" stroke="#A27BFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.4214;0.4464;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="55.0" font-size="26">🔐</text>
+<text x="56" y="42.0" fill="#E8EBF7" font-size="19" font-weight="650">Sealed Secrets</text>
+<text x="56" y="66.0" fill="#8E97B8" font-size="14.5">segredo cifrado no Git</text>
+</g>
+<g transform="translate(816,446)">
+<rect width="200" height="92" rx="16" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<rect width="200" height="92" rx="16" fill="#A27BFF" fill-opacity="0.10" stroke="#A27BFF" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.4214;0.4464;0.9643;0.9893;1.0000"/></rect>
+<text x="18" y="55.0" font-size="26">🔒</text>
+<text x="56" y="42.0" fill="#E8EBF7" font-size="19" font-weight="650">HTTPS</text>
+<text x="56" y="66.0" fill="#8E97B8" font-size="14.5">cert-manager</text>
+</g>
+<path d="M294 492 L318 492" fill="none" stroke="#2A3358" stroke-width="2.5" stroke-dasharray="6 7"/>
+<path d="M294 492 L318 492" fill="none" stroke="#FFC94D" stroke-width="2.5" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.4143;0.4286;0.9643;0.9786;1.0000"/></path>
+<g transform="translate(536,456)" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.4429;0.4679;0.9643;0.9893;1.0000"/><circle r="13" fill="#3DDC97"/><path d="M-5.8500000000000005 0 l3.9 4.16 l7.15 -8.06" fill="none" stroke="#0B1020" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(64,560)">
+<rect width="952" height="170" rx="18" fill="#131A33" stroke="#2A3358" stroke-width="2"/>
+<text x="22" y="34" fill="#E8EBF7" font-size="20" font-weight="650">🚀 Argo Rollouts · canary em produção</text>
+<text x="22" y="58" fill="#8E97B8" font-size="15">a versão nova recebe parte dos requests; o Prometheus mede os 5xx dela a cada passo</text>
+<rect x="22" y="82" width="700" height="34" rx="10" fill="#6C7CFF" fill-opacity=".35"/>
+<text x="36" y="105" fill="#E8EBF7" font-size="15" font-weight="600">v1 estável</text>
+<rect x="722" y="82" width="0" height="34" rx="10" fill="#FFC94D" transform="scale(-1,1)" transform-origin="722 0"><animate attributeName="width" dur="14.0s" repeatCount="indefinite" values="0;0;140;140;350;350;700;700;0;0" keyTimes="0.0000;0.4500;0.4857;0.5857;0.6214;0.7286;0.7643;0.9143;0.9571;1.0000"/></rect>
+<text x="744" y="106" fill="#FFC94D" font-size="24" font-weight="750" opacity="0">v2 · 20%<animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.4857;0.5000;0.6143;0.6286;1.0000"/></text>
+<text x="744" y="106" fill="#FFC94D" font-size="24" font-weight="750" opacity="0">v2 · 50%<animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.6214;0.6357;0.7571;0.7714;1.0000"/></text>
+<text x="744" y="106" fill="#FFC94D" font-size="24" font-weight="750" opacity="0">v2 · 100%<animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.7643;0.7786;0.9143;0.9286;1.0000"/></text>
+<text x="22" y="148" fill="#8E97B8" font-size="15">análise: taxa de 5xx da v2 &lt; 5%</text>
+<g transform="translate(268,143)" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.5214;0.5464;0.9643;0.9893;1.0000"/><circle r="11" fill="#3DDC97"/><path d="M-4.95 0 l3.3 3.52 l6.050000000000001 -6.82" fill="none" stroke="#0B1020" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(302,143)" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.6643;0.6893;0.9643;0.9893;1.0000"/><circle r="11" fill="#3DDC97"/><path d="M-4.95 0 l3.3 3.52 l6.050000000000001 -6.82" fill="none" stroke="#0B1020" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(336,143)" opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.8000;0.8250;0.9643;0.9893;1.0000"/><circle r="11" fill="#3DDC97"/><path d="M-4.95 0 l3.3 3.52 l6.050000000000001 -6.82" fill="none" stroke="#0B1020" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="390" y="148" fill="#8E97B8" font-size="15">· reprovou → volta sozinho para a v1</text>
+</g>
+<text x="64" y="768" fill="#8E97B8" font-size="14" letter-spacing="2">PROJETOS ISOLADOS · NETWORKPOLICY DEFAULT-DENY</text>
+<g transform="translate(64,784)"><rect width="294" height="56" rx="14" fill="#131A33" stroke="#3DDC97" stroke-opacity=".7" stroke-width="2"/><circle cx="30" cy="28" r="9" fill="#3DDC97"><animate attributeName="opacity" values="1;.35;1" dur="2.4s" begin="0.0s" repeatCount="indefinite"/></circle><text x="52" y="25" fill="#E8EBF7" font-size="17" font-weight="600">crivo</text><text x="52" y="45" fill="#8E97B8" font-size="13.5">develop · prod · 🛡️ isolado</text></g>
+<g transform="translate(382,784)"><rect width="294" height="56" rx="14" fill="#131A33" stroke="#6C7CFF" stroke-opacity=".7" stroke-width="2"/><circle cx="30" cy="28" r="9" fill="#6C7CFF"><animate attributeName="opacity" values="1;.35;1" dur="2.4s" begin="0.5s" repeatCount="indefinite"/></circle><text x="52" y="25" fill="#E8EBF7" font-size="17" font-weight="600">wlstore</text><text x="52" y="45" fill="#8E97B8" font-size="13.5">develop · prod · 🛡️ isolado</text></g>
+<g transform="translate(700,784)"><rect width="294" height="56" rx="14" fill="#131A33" stroke="#A27BFF" stroke-opacity=".7" stroke-width="2"/><circle cx="30" cy="28" r="9" fill="#A27BFF"><animate attributeName="opacity" values="1;.35;1" dur="2.4s" begin="1.0s" repeatCount="indefinite"/></circle><text x="52" y="25" fill="#E8EBF7" font-size="17" font-weight="600">nest-rabbitmq</text><text x="52" y="45" fill="#8E97B8" font-size="13.5">develop · prod · 🛡️ isolado</text></g>
+<g opacity="0"><animate attributeName="opacity" dur="14.0s" repeatCount="indefinite" values="0.0;0.0;1.0;1.0;0.0;0.0" keyTimes="0.0000;0.8143;0.8393;0.9357;0.9607;1.0000"/><rect x="300" y="350" width="480" height="52" rx="26" fill="#3DDC97"/><text x="540" y="384" fill="#0B1020" font-size="21" font-weight="750" text-anchor="middle">✓ v2 em produção, sem downtime</text></g>
+<text x="60" y="900" fill="#8E97B8" font-size="14" letter-spacing="2">3 · OBSERVABILIDADE E ALERTAS</text>
+<g transform="translate(60,914)"><rect width="131" height="42" rx="21" fill="#FFC94D" fill-opacity=".14" stroke="#FFC94D" stroke-opacity=".7"/><text x="66" y="27" fill="#E8EBF7" font-size="16" font-weight="600" text-anchor="middle">Prometheus</text></g>
+<g transform="translate(203.0,914)"><rect width="100" height="42" rx="21" fill="#FFC94D" fill-opacity=".14" stroke="#FFC94D" stroke-opacity=".7"/><text x="50" y="27" fill="#E8EBF7" font-size="16" font-weight="600" text-anchor="middle">Grafana</text></g>
+<g transform="translate(314.5,914)"><rect width="68" height="42" rx="21" fill="#FFC94D" fill-opacity=".14" stroke="#FFC94D" stroke-opacity=".7"/><text x="34" y="27" fill="#E8EBF7" font-size="16" font-weight="600" text-anchor="middle">Loki</text></g>
+<g transform="translate(394.5,914)"><rect width="152" height="42" rx="21" fill="#FF6B6B" fill-opacity=".14" stroke="#FF6B6B" stroke-opacity=".7"/><text x="76" y="27" fill="#E8EBF7" font-size="16" font-weight="600" text-anchor="middle">Alertmanager</text></g>
+<g transform="translate(558.5,914)"><rect width="120" height="42" rx="21" fill="#3DDC97" fill-opacity=".14" stroke="#3DDC97" stroke-opacity=".7"/><text x="60" y="27" fill="#E8EBF7" font-size="16" font-weight="600" text-anchor="middle">SLO 99,5%</text></g>
+<path d="M790 950 L820 938 L850 944 L880 926 L910 932 L940 916 L970 922 L1000 908" fill="none" stroke="#3DDC97" stroke-width="3" stroke-linecap="round" stroke-dasharray="260" stroke-dashoffset="260"><animate attributeName="stroke-dashoffset" values="260;0;0" keyTimes="0;.6;1" dur="3.5s" repeatCount="indefinite"/></path>
+<line x1="60" y1="990" x2="1020" y2="990" stroke="#2A3358" stroke-width="1.5"/>
+<text x="60" y="1030" fill="#8E97B8" font-size="17">github.com/infra-devops-full/infra</text>
+<text x="1020" y="1030" fill="#8E97B8" font-size="17" text-anchor="end">#DevOps #Kubernetes #GitOps #ArgoCD</text>
+</svg>

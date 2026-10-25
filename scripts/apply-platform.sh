@@ -77,5 +77,7 @@ fi
 
 echo "▸ ArgoCD observando $INFRA_REPO_URL ($INFRA_BRANCH)"
 CHECK_KINDS=true
-render | kubectl apply -f -
+# Server-side apply: sem a annotation last-applied-configuration (limite de
+# 256 KB), que os dashboards grandes do Grafana estourariam.
+render | kubectl apply --server-side --field-manager=devops-platform --force-conflicts -f -
 echo "✅ Plataforma aplicada (argocd/ + k8s/)"

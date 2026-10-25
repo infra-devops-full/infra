@@ -1,5 +1,5 @@
 import sys
-INFRA='argocd|monitoring|kube-system|kube-public|kube-node-lease|default'
+INFRA='argocd|argo-rollouts|cert-manager|kyverno|monitoring|kube-system|kube-public|kube-node-lease|default'
 def labels(expr, ns):
     # project = namespace sem o último "-<env>" (ou o namespace inteiro), env = sufixo
     return (f'label_replace(label_replace(label_replace({expr}, '

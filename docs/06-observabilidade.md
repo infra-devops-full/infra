@@ -8,6 +8,41 @@
 | **Logs** | o que exatamente aconteceu? | Loki (coletado pelo Alloy) |
 | **Traces** | por onde o request passou e onde demorou? | *(fase 6 do roteiro: OpenTelemetry + Tempo)* |
 
+## Página inicial: *Platform / Início*
+
+Ao abrir o Grafana (https://grafana.devops.local), a home é o
+**Platform / Início**: logo, atalhos para os dashboards e ferramentas, e
+o estado geral da plataforma, cada número clicável para os detalhes:
+
+| Linha | O quê |
+| ----- | ----- |
+| Agora | apps falhando (ArgoCD), alertas disparando, disponibilidade 24h, requests/s, canaries em andamento, certificados vencendo em 14 dias |
+| | Applications, pods, CPU e memória do cluster, mensagens paradas no RabbitMQ, erros no log na última hora |
+| Projetos | saúde/sync de cada app, requests/s e taxa de 5xx por projeto |
+| Recursos e logs | CPU e memória por namespace de projeto, erros no log por projeto (Loki) |
+| Alertas ativos | tabela com severidade, projeto, ambiente e app |
+
+## Dashboards de infraestrutura (pasta *Infra*)
+
+Dashboards conhecidos da comunidade (grafana.com), em revisão fixa,
+apontados para o nosso Prometheus e com o cabeçalho da plataforma:
+
+| Dashboard | Base | Fonte das métricas |
+| --------- | ---- | ------------------ |
+| Infra / Nodes | [Node Exporter Full (1860)](https://grafana.com/grafana/dashboards/1860) | node-exporter (kube-prometheus-stack) |
+| Infra / Kubernetes | [K8S Dashboard (15661)](https://grafana.com/grafana/dashboards/15661) | kube-state-metrics + cAdvisor |
+| Infra / ArgoCD | [ArgoCD (14584)](https://grafana.com/grafana/dashboards/14584) | ServiceMonitors do controller, server e repo-server |
+| Infra / RabbitMQ | [RabbitMQ-Overview (10991)](https://grafana.com/grafana/dashboards/10991) | plugin `rabbitmq_prometheus` (porta 15692) + ServiceMonitor criado pelo `setup-rabbitmq.sh` |
+
+Gerados por `scripts/dev/gen-grafana.py` (`make gen-observability`), que
+baixa cada um na revisão de `COMMUNITY`, troca o datasource e adiciona o
+cabeçalho. Para atualizar: mude a revisão e rode de novo. O logo vem de
+`config/branding/platform-logo.png` no GitHub (aparece depois do push).
+
+> Os ConfigMaps dos dashboards passam de 200 KB. Por isso o
+> `apply-platform.sh` usa *server-side apply*: o `kubectl apply` comum guarda
+> uma cópia do objeto numa annotation limitada a 256 KB.
+
 ## Dashboard *Platform / Apps*
 
 http://grafana.devops.local → pasta **Platform**. Filtros: **Projeto →
@@ -82,7 +117,8 @@ Labels disponíveis: `project`, `env`, `app`, `namespace`, `pod`, `container`.
 | regras de SLO e alertas | `apply-platform.sh` | `k8s/prometheus-rules-apps.yaml` (gerado por `scripts/dev/gen-prometheus-rules.py`) |
 | Loki 7.3.0 (single-binary) | `setup-observability.sh` | `config/observability/loki-values.yaml` |
 | Alloy 1.13.0 | `setup-observability.sh` | `config/observability/alloy-values.yaml` |
-| datasource Loki + dashboards | `apply-platform.sh` | `k8s/*.yaml` (sidecars do Grafana) |
+| datasource Loki + dashboards | `apply-platform.sh` | `k8s/*.yaml` (sidecars do Grafana); home em `grafana.ini` → `default_home_dashboard_path` |
+| métricas do cert-manager e do RabbitMQ | `setup-observability.sh` / `setup-rabbitmq.sh` | ServiceMonitors |
 
 Reinstalar/atualizar num cluster existente: `make observability`.
 

@@ -56,6 +56,11 @@ prometheus:
 
 grafana:
   adminPassword: "devops.local2026"
+  grafana.ini:
+    dashboards:
+      # Página inicial = "Platform / Início" (k8s/grafana-dashboard-home.yaml),
+      # no caminho em que o sidecar grava (pasta = annotation grafana_folder).
+      default_home_dashboard_path: /tmp/dashboards/Platform/platform-home.json
   persistence:
     enabled: false
   sidecar:

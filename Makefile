@@ -195,10 +195,11 @@ observability: ## Instala/atualiza Prometheus/Alertmanager/Grafana, Loki, Alloy,
 	@./scripts/setup-observability.sh
 	@./scripts/apply-platform.sh
 
-gen-observability: ## Regenera k8s/prometheus-rules-apps.yaml e o dashboard de SLO (depois: make apply-argocd)
+gen-observability: ## Regenera regras de alerta e dashboards gerados em k8s/ (depois: make apply-argocd)
 	@python3 scripts/dev/gen-prometheus-rules.py > k8s/prometheus-rules-apps.yaml
 	@python3 scripts/dev/gen-dashboard-slo.py > k8s/grafana-dashboard-slo.yaml
-	@echo "$(GREEN)✅ k8s/prometheus-rules-apps.yaml e k8s/grafana-dashboard-slo.yaml gerados$(RESET)"
+	@python3 scripts/dev/gen-grafana.py >/dev/null
+	@echo "$(GREEN)✅ regras e dashboards gerados em k8s/$(RESET)"
 
 alerts: ## Alertas ativos no Alertmanager (silenciados/inibidos marcados)
 	@kubectl get --raw '/api/v1/namespaces/monitoring/services/kube-prometheus-stack-alertmanager:9093/proxy/api/v2/alerts' \
