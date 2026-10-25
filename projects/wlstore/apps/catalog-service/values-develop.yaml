@@ -5,4 +5,4 @@
 # para o values.yaml).
 image:
   repository: ghcr.io/whitelabel-store/wlstore-be/catalog-service
-  tag: sha-2c24f00
+  tag: sha-165281b
