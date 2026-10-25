@@ -633,6 +633,60 @@ make policy-check        # o mesmo veredito, sem cluster
 
 ---
 
+## Exercício 19: o canary que se protege sozinho (Argo Rollouts)
+
+```bash
+make lab-canary        # o demo vira um Rollout (passos de 1 min)
+make rollouts
+```
+
+Publique uma "versão nova" com bug: uma imagem que responde **500** na rota
+`/status/500` (no app estável essa rota dá 404). Gere tráfego nela:
+
+```bash
+kubectl -n treino patch rollout demo --type json \
+  -p '[{"op":"replace","path":"/spec/template/spec/containers/0/image","value":"mccutchen/go-httpbin:v2.15.0"}]'
+
+for i in $(seq 1 600); do
+  curl -s -o /dev/null --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/status/500
+  sleep 0.3
+done &
+
+watch -n 5 make rollouts      # ou https://rollouts.devops.local
+```
+
+**Sintoma observado:** `Paused 1/4 20%` e, ~1 min depois, `Degraded 0/4 0%`
+com `RolloutAborted: ... Metric "canary-5xx-rate" assessed Failed`. O pod
+estável (products) nunca saiu do ar. Alguns minutos depois, `make alerts`
+mostra `RolloutAborted`.
+
+<details><summary>Dica</summary>
+
+```bash
+kubectl -n treino get analysisrun
+kubectl -n treino get analysisrun <nome> -o yaml | grep -A6 measurements
+kubectl -n treino get ingress          # repare no demo-demo-canary
+```
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+- O NGINX mandou 20% dos requests para a versão nova (Ingress `-canary`,
+  annotation `canary-weight`). A análise mediu 100% de 5xx nela em duas
+  medições seguidas e reprovou. O Rollout tirou o peso do canary: **80% dos
+  usuários nunca viram o bug, e os 20% só por ~1 minuto**.
+- Compare com o exercício 1: lá, um deploy ruim derrubava 100% até alguém
+  agir.
+- Em um projeto real, o Git ainda pediria a versão ruim (ArgoCD *Degraded*):
+  conserta-se publicando outra versão ou revertendo o commit de deploy.
+- Teste também `make promote`, `make abort` e `make retry` com uma versão
+  boa (troque só uma variável de ambiente).
+- **Limpeza:** `make lab-up` (o demo volta a ser um Deployment).
+- Mais em [15-entrega-progressiva.md](15-entrega-progressiva.md).
+</details>
+
+---
+
 ## Desafio final: o incidente misterioso
 
 Peça para alguém (ou faça você, sem olhar) aplicar **duas** quebras ao mesmo
@@ -663,3 +717,4 @@ Esse formato (sintoma → evidência → causa → correção → prevenção) �
 | alerta *suppressed* | inibido por outro alerta mais grave do mesmo app | `make alerts`, Alertmanager |
 | timeout entre namespaces, mas o Ingress responde | NetworkPolicy (default-deny) | `kubectl get networkpolicy -n <ns>` |
 | `denied the request` / `violates PodSecurity` no apply | política de admissão (Kyverno / Pod Security) | a própria mensagem; `make policies` |
+| Rollout `Degraded` / `RolloutAborted` | a análise reprovou o canary ou ele não ficou pronto | `make rollouts`, `kubectl get analysisrun` |

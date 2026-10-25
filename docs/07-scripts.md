@@ -14,6 +14,7 @@ make setup
        ├─ setup-security.sh               cert-manager + CA local, Kyverno
        ├─ (argocd — dentro do setup.sh)
        ├─ setup-observability.sh          Prometheus/Alertmanager/Grafana, métricas, Loki, Alloy
+       ├─ setup-delivery.sh               Argo Rollouts (canary)
        ├─ setup-sealed-secrets.sh         controller + restaura/backup da chave
        ├─ apply-project.sh  (por projeto)
        │    ├─ kubectl apply sealed/<env>/  (SealedSecrets → Secrets)
@@ -35,6 +36,7 @@ lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts 
 | `dev/gen-prometheus-rules.py`, `dev/gen-dashboard-slo.py` | gerar `k8s/prometheus-rules-apps.yaml` e o dashboard de SLO (edite os geradores, não o YAML) | `make gen-observability` |
 | `apply-project.sh` | preparar o que o ArgoCD **não** cria: namespaces, SealedSecrets (antes das dependências), bancos, filas | `make project-apply` |
 | `setup-security.sh` | cert-manager + CA local (backup/restauração da CA) e Kyverno | `make security` |
+| `setup-delivery.sh` | Argo Rollouts (controller + dashboard) | `make delivery` |
 | `policy-check.sh` | testar as políticas do Kyverno contra todos os apps renderizados, sem cluster | `make policy-check` |
 | `setup-sealed-secrets.sh` | instalar o controller do Sealed Secrets e fazer backup/restauração da chave | `make sealed-secrets` |
 | `seal-secrets.sh` | `secrets/<env>.env` → `sealed/<env>/*.yaml` (gera senhas de infra que faltarem) | `make seal` |
@@ -52,7 +54,8 @@ Todos são **idempotentes**: rodar de novo não quebra nada, só reconcilia.
 
 | Frequência | Comandos |
 | ---------- | -------- |
-| **todo dia** | `status`, `alerts`, `policies`, `pods`, `apps`, `logs`, `describe`, `events` |
+| **todo dia** | `status`, `alerts`, `policies`, `rollouts`, `pods`, `apps`, `logs`, `describe`, `events` |
+| **num deploy em prod** | `rollouts`, `promote`, `abort`, `retry` |
 | **quando algo muda** | `project-apply`, `seal`, `rollout`, `refresh`, `hosts`, `doctor` |
 | **raramente** | `setup`, `destroy`, `start`, `stop`, `github`, `observability`, `security`, `trust-ca`, `sealed-secrets`, `apply-argocd`, `postgres`, `ghcr` |
 | **validar antes do commit** | `helm-lint`, `helm-template`, `render-platform`, `gen-observability`, `policy-check`, `projects` |

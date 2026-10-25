@@ -126,5 +126,31 @@ w(f'''        - record: app:request_duration_seconds:p95_5m
           annotations:
             summary: "ArgoCD: {{{{ $labels.name }}}} fora de sincronia"
             description: "O cluster difere do Git para {{{{ $labels.name }}}} há 30 min (sync falhando ou selfHeal desligado)."
-            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/13-alertas-slo.md#argoappoutofsync''')
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/13-alertas-slo.md#argoappoutofsync
+
+    - name: platform-apps.rollouts
+      rules:
+        - alert: RolloutAborted
+          # A análise reprovou o canary (ou ele não ficou pronto no prazo): o
+          # tráfego voltou para a versão estável, mas o Git ainda pede a nova.
+          expr: >-
+            {labels('label_replace(rollout_info{phase=~"Abort|Degraded|Error|Timeout"}, "app", "$1", "name", "(.*)")', 'exported_namespace')}
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}} {{{{ $labels.app }}}}: canary abortado, versão estável no ar"
+            description: "O Rollout {{{{ $labels.exported_namespace }}}}/{{{{ $labels.name }}}} abortou a versão nova. Corrija e publique outra versão (ou reverta o image.tag no Git)."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/15-entrega-progressiva.md#rolloutaborted
+        - alert: RolloutStuckPaused
+          # Pausa sem duração (aprovação manual) esquecida.
+          expr: >-
+            {labels('label_replace(rollout_info{phase="Paused"}, "app", "$1", "name", "(.*)")', 'exported_namespace')}
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}} {{{{ $labels.app }}}}: canary pausado há 1h"
+            description: "O Rollout {{{{ $labels.exported_namespace }}}}/{{{{ $labels.name }}}} está pausado esperando promoção (make promote) ou aborto (make abort)."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/15-entrega-progressiva.md#rolloutstuckpaused''')
 print('\n'.join(out))

@@ -1,0 +1,19 @@
+{{- if .Values.rollout.enabled -}}
+{{- /* Service da versão nova durante o canary (o Argo Rollouts ajusta o selector). */ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.fullname" . }}-canary
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    devops-platform/service-role: canary
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "app.selectorLabels" . | nindent 4 }}
+{{- end }}

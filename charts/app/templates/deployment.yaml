@@ -1,11 +1,51 @@
-apiVersion: apps/v1
-kind: Deployment
+{{- /*
+Deployment, ou Rollout (Argo Rollouts) com rollout.enabled: o pod é o mesmo;
+o Rollout troca a estratégia de atualização por canary com análise.
+*/ -}}
+{{- $rollout := .Values.rollout.enabled -}}
+{{- $fullname := include "app.fullname" . -}}
+apiVersion: {{ ternary "argoproj.io/v1alpha1" "apps/v1" $rollout }}
+kind: {{ ternary "Rollout" "Deployment" $rollout }}
 metadata:
-  name: {{ include "app.fullname" . }}
+  name: {{ $fullname }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if $rollout }}
+  revisionHistoryLimit: 3
+  # Versão nova que não fica pronta nesse prazo → aborta e volta à estável.
+  progressDeadlineSeconds: {{ .Values.rollout.progressDeadlineSeconds }}
+  progressDeadlineAbort: true
+  strategy:
+    canary:
+      stableService: {{ $fullname }}
+      canaryService: {{ $fullname }}-canary
+      {{- if and .Values.ingress.enabled (include "app.ingressHost" .) }}
+      # O controller cria um Ingress "-canary" (annotations canary-weight do
+      # NGINX) e move o peso a cada passo: % de requests, não de pods.
+      trafficRouting:
+        nginx:
+          stableIngress: {{ $fullname }}
+      {{- end }}
+      {{- if .Values.rollout.analysis.enabled }}
+      # Análise em segundo plano desde o 1º passo: falhou → aborta → rollback.
+      analysis:
+        startingStep: 1
+        templates:
+          - templateName: {{ .Values.rollout.analysis.template }}
+            clusterScope: true
+        args:
+          - name: namespace
+            value: {{ .Release.Namespace | quote }}
+          - name: canary-service
+            value: {{ printf "%s-canary" $fullname | quote }}
+          - name: max-error-rate
+            value: {{ .Values.rollout.analysis.maxErrorRate | quote }}
+      {{- end }}
+      steps:
+        {{- toYaml .Values.rollout.steps | nindent 8 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "app.selectorLabels" . | nindent 6 }}

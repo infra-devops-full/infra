@@ -6,7 +6,7 @@ NGINX Ingress, ArgoCD, Prometheus e Grafana. Cada aplicação entra como um
 
 > 📚 **Documentação detalhada e treino:** [`docs/`](docs/README.md). Lá estão a
 > arquitetura, GitOps, CI/CD, observabilidade, o mapa dos scripts,
-> troubleshooting, roteiro de estudo e **18 exercícios de "quebre e conserte"**
+> troubleshooting, roteiro de estudo e **19 exercícios de "quebre e conserte"**
 > num laboratório isolado (`make lab-up`).
 
 Tudo fora de `projects/` é genérico e não cita nenhuma aplicação:
@@ -782,3 +782,20 @@ make policy-check    # testa todos os apps contra as políticas, sem cluster (ro
 A CA tem backup em `~/.config/devops-platform/ca/`, então recriar o cluster
 não exige confiar de novo. Detalhes, exceções e problemas comuns:
 [docs/14-seguranca.md](docs/14-seguranca.md).
+
+## 15. Entrega progressiva (canary)
+
+Em **prod**, todo app sobe como **canary** (Argo Rollouts): a versão nova
+recebe 20% dos requests, depois 50%, e só então vira a estável. A cada
+minuto, uma análise consulta no Prometheus a taxa de 5xx **da versão nova**;
+passou de 5%, o Rollout aborta e todo o tráfego volta sozinho para a versão
+anterior (alerta `RolloutAborted`). Develop continua com deploy direto.
+
+```bash
+make rollouts                                  # canaries em andamento
+make promote SERVICE=<app> NAMESPACE=<ns>      # avança (FULL=1: direto a 100%)
+make abort   SERVICE=<app> NAMESPACE=<ns>      # volta para a estável
+```
+
+Dashboard: https://rollouts.devops.local (rode `make hosts` uma vez).
+Detalhes e runbooks: [docs/15-entrega-progressiva.md](docs/15-entrega-progressiva.md).

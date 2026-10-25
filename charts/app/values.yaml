@@ -83,6 +83,24 @@ readinessProbe:
   timeoutSeconds: 3
   failureThreshold: 5
 
+# Entrega progressiva (Argo Rollouts). true = Rollout canary em vez de
+# Deployment: a versão nova recebe uma fração dos requests (pelo NGINX
+# Ingress) enquanto a análise confere a taxa de 5xx dela no Prometheus.
+# Passou em todos os passos → vira a estável. Falhou → aborta e volta sozinho.
+rollout:
+  enabled: false
+  steps:
+    - setWeight: 20
+    - pause: { duration: 2m }
+    - setWeight: 50
+    - pause: { duration: 2m }
+  analysis:
+    enabled: true
+    # ClusterAnalysisTemplate em k8s/rollouts-analysis.yaml
+    template: platform-canary-error-rate
+    maxErrorRate: "0.05"     # 5% de 5xx na versão nova = aborta
+  progressDeadlineSeconds: 600
+
 autoscaling:
   enabled: false
   minReplicas: 1

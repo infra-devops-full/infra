@@ -1,5 +1,6 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus alertmanager argocd alerts gen-observability \
         security trust-ca untrust-ca policies policy-check \
+        delivery rollouts promote abort retry lab-canary \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -74,8 +75,15 @@ rollout: ## Reinicia um app (puxa a imagem de novo). Uso: make rollout SERVICE=<
 	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then \
 		echo "$(YELLOW)⚠️  Uso: make rollout SERVICE=<app> NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; \
 	fi
-	@kubectl rollout restart deploy/$(SERVICE) -n $(NAMESPACE)
-	@kubectl rollout status deploy/$(SERVICE) -n $(NAMESPACE) --timeout=180s
+	@# Rollout (Argo Rollouts): restartAt recria os pods aos poucos, sem canary.
+	@if kubectl get rollout $(SERVICE) -n $(NAMESPACE) >/dev/null 2>&1; then \
+		kubectl patch rollout $(SERVICE) -n $(NAMESPACE) --type merge \
+			-p "{\"spec\":{\"restartAt\":\"$$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" && \
+		kubectl wait rollout/$(SERVICE) -n $(NAMESPACE) --for=jsonpath='{.status.phase}'=Healthy --timeout=180s; \
+	else \
+		kubectl rollout restart deploy/$(SERVICE) -n $(NAMESPACE) && \
+		kubectl rollout status deploy/$(SERVICE) -n $(NAMESPACE) --timeout=180s; \
+	fi
 
 shell: ## Abre um shell no container de um app. Uso: make shell SERVICE=<app> NAMESPACE=<projeto>-<env>
 	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then \
@@ -126,6 +134,34 @@ policies: ## Violações das políticas do Kyverno nos projetos (PolicyReports)
 
 policy-check: ## Testa as políticas do Kyverno contra todos os apps renderizados (sem cluster)
 	@./scripts/policy-check.sh
+
+delivery: ## Instala/atualiza o Argo Rollouts (canary) e a análise padrão (cluster existente)
+	@./scripts/setup-delivery.sh
+	@./scripts/apply-platform.sh
+
+rollouts: ## Rollouts (canary) de todos os projetos: fase, passo, peso e versões
+	@kubectl get rollouts -A -o json | jq -r '(["NAMESPACE","APP","FASE","PASSO","PESO CANARY","ESTÁVEL","MENSAGEM"] | @tsv), \
+		(.items[] | [.metadata.namespace, .metadata.name, .status.phase, \
+		 (((.status.currentStepIndex // 0) | tostring) + "/" + ((.spec.strategy.canary.steps // []) | length | tostring)), \
+		 ((.status.canary.weights.canary.weight // 0) | tostring) + "%", (.status.stableRS // "-"), \
+		 ((.status.message // "") | .[0:60])] | @tsv)' | column -t -s $$'\t'
+
+promote: ## Avança o canary (pula a pausa atual; FULL=1 vai direto a 100%). Uso: make promote SERVICE=<app> NAMESPACE=<ns>
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then echo "$(YELLOW)⚠️  Uso: make promote SERVICE=<app> NAMESPACE=<ns> [FULL=1]$(RESET)"; exit 1; fi
+	@if [ -n "$(FULL)" ]; then \
+		kubectl patch rollout $(SERVICE) -n $(NAMESPACE) --subresource=status --type merge -p '{"status":{"promoteFull":true}}'; \
+	else \
+		kubectl patch rollout $(SERVICE) -n $(NAMESPACE) --subresource=status --type merge -p '{"status":{"pauseConditions":null}}' && \
+		kubectl patch rollout $(SERVICE) -n $(NAMESPACE) --type merge -p '{"spec":{"paused":false}}'; \
+	fi
+
+abort: ## Aborta o canary: todo o tráfego volta para a versão estável. Uso: make abort SERVICE=<app> NAMESPACE=<ns>
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then echo "$(YELLOW)⚠️  Uso: make abort SERVICE=<app> NAMESPACE=<ns>$(RESET)"; exit 1; fi
+	@kubectl patch rollout $(SERVICE) -n $(NAMESPACE) --subresource=status --type merge -p '{"status":{"abort":true}}'
+
+retry: ## Tenta de novo um canary abortado (mesma versão). Uso: make retry SERVICE=<app> NAMESPACE=<ns>
+	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then echo "$(YELLOW)⚠️  Uso: make retry SERVICE=<app> NAMESPACE=<ns>$(RESET)"; exit 1; fi
+	@kubectl patch rollout $(SERVICE) -n $(NAMESPACE) --subresource=status --type merge -p '{"status":{"abort":false}}'
 
 sealed-secrets: ## Instala o controller do Sealed Secrets + backup/restauração da chave
 	@./scripts/setup-sealed-secrets.sh
@@ -221,6 +257,14 @@ lab-up: ## Treino: instala/restaura o app demo no namespace treino (fora do Argo
 		--set app.name=demo,app.environment=treino,app.project=lab \
 		--force-conflicts --wait --timeout 3m >/dev/null
 	@echo "$(GREEN)✅ demo no ar:$(RESET) curl --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local"
+
+lab-canary: ## Treino: o demo vira um Rollout canary (passos de 1 min) — exercício 19
+	@$(MAKE) --no-print-directory lab-up >/dev/null
+	@helm upgrade demo charts/app -n $(LAB_NS) -f docs/labs/demo-values.yaml -f docs/labs/demo-canary-values.yaml \
+		--set app.name=demo,app.environment=treino,app.project=lab \
+		--force-conflicts --wait --timeout 3m >/dev/null
+	@kubectl wait rollout/demo -n $(LAB_NS) --for=jsonpath='{.status.phase}'=Healthy --timeout=180s >/dev/null
+	@echo "$(GREEN)✅ demo é um Rollout:$(RESET) make rollouts | https://rollouts.devops.local"
 
 lab-status: ## Treino: pods, eventos e resposta HTTP do app demo
 	@kubectl get deploy,pods,svc,endpoints,ingress -n $(LAB_NS) 2>/dev/null

@@ -36,6 +36,6 @@ e um exercício.
 | 2 | **Sealed Secrets**: senhas fora do Git, segredos selados e aplicados pelo ArgoCD, backup da chave | ✅ feito |
 | 3 | **Alertas + SLOs**: SLO de 99,5% por app, alertas multi-burn-rate, latência, app fora, ArgoCD; dashboard de SLO; notificação pronta para plugar | ✅ feito |
 | 4 | **HTTPS + NetworkPolicy + Kyverno**: Kubernetes 1.34, cert-manager com CA local, default-deny por namespace, Pod Security, políticas de admissão testadas no CI | ✅ feito |
-| 5 | **Argo Rollouts**: canary com rollback automático por métricas | próximo |
-| 6 | **Tracing**: OpenTelemetry + Tempo (front → API → RabbitMQ → serviço) | |
+| 5 | **Argo Rollouts**: canary em prod (20% → 50% → 100%) com análise de 5xx no Prometheus e rollback automático | ✅ feito |
+| 6 | **Tracing**: OpenTelemetry + Tempo (front → API → RabbitMQ → serviço) | próximo |
 | 7 | **Nuvem**: Terraform, cluster de prod separado, banco gerenciado, DNS/TLS reais, backup (Velero); guia para AWS, DigitalOcean e VPS | |

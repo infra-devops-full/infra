@@ -1,0 +1,38 @@
+# =============================================================================
+# Análise padrão dos canaries (Argo Rollouts). Usada por todo app com
+# rollout.enabled (charts/app → strategy.canary.analysis).
+#
+# A cada minuto, consulta no Prometheus a taxa de 5xx que o NGINX Ingress
+# registrou para o Service -canary (só a versão nova). Acima de max-error-rate em
+# 2 medições seguidas → AnalysisRun Failed → o Rollout aborta e todo o tráfego
+# volta para a versão estável.
+# Sem tráfego no canary (resultado vazio/NaN) conta como sucesso: não dá para
+# reprovar uma versão que ninguém chamou. Em produção real, combine com um
+# mínimo de requests ou tráfego sintético.
+# Detalhes: docs/15-entrega-progressiva.md
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterAnalysisTemplate
+metadata:
+  name: platform-canary-error-rate
+spec:
+  args:
+    - name: namespace
+    - name: canary-service
+    - name: max-error-rate
+      value: "0.05"
+  metrics:
+    - name: canary-5xx-rate
+      interval: 1m
+      failureLimit: 1        # tolera 1 medição ruim; a 2ª aborta
+      successCondition: "len(result) == 0 || isNaN(result[0]) || result[0] <= {{args.max-error-rate}}"
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+          # O NGINX conta o tráfego do canary no Ingress/Service ESTÁVEL e marca
+          # a versão nova no label canary="<namespace>-<service-canary>-<porta>".
+          # [2m]: a coleta é a cada 60s; rate precisa de 2 pontos.
+          query: |
+            sum(rate(nginx_ingress_controller_requests{exported_namespace="{{args.namespace}}", canary=~"{{args.namespace}}-{{args.canary-service}}-[0-9]+", status=~"5.."}[2m]))
+            /
+            sum(rate(nginx_ingress_controller_requests{exported_namespace="{{args.namespace}}", canary=~"{{args.namespace}}-{{args.canary-service}}-[0-9]+"}[2m]))

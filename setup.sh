@@ -209,6 +209,10 @@ log_step "ETAPA 4/7: Observabilidade (Prometheus, Grafana, Loki)"
 # `make observability` para atualizar um cluster existente.
 bash "$SCRIPT_DIR/scripts/setup-observability.sh"
 
+# Argo Rollouts (canary com análise no Prometheus) — precisa do CRD
+# ServiceMonitor do kube-prometheus-stack.
+bash "$SCRIPT_DIR/scripts/setup-delivery.sh"
+
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=grafana \
   --namespace=monitoring --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."
@@ -265,6 +269,7 @@ echo -e "  🎯 ArgoCD       → https://argocd.devops.local   (admin / $ARGOCD_
 echo -e "  📊 Grafana      → https://grafana.devops.local   (admin / devops.local2026)"
 echo -e "  🔍 Prometheus   → https://prometheus.devops.local"
 echo -e "  🚨 AlertManager → https://alertmanager.devops.local"
+echo -e "  🚦 Rollouts     → https://rollouts.devops.local"
 echo ""
 CA_CERT_FILE="$(eval echo "${PLATFORM_CA_DIR:-$HOME/.config/devops-platform/ca}")/platform-ca.crt"
 if [[ "$(uname)" == "Darwin" ]] && ! security verify-cert -c "$CA_CERT_FILE" >/dev/null 2>&1; then

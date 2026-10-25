@@ -23,6 +23,7 @@ make sealed-secrets                # controller + backup/restauração da chave
 make security                      # cert-manager + CA local, Kyverno e políticas
 make trust-ca | untrust-ca         # navegador confia (ou não) na CA local (sudo)
 make policy-check                  # políticas × todos os apps, sem cluster
+make delivery                      # Argo Rollouts + análise padrão
 make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
 make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ```
@@ -32,6 +33,8 @@ make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ```bash
 make alerts                        # alertas ativos (Alertmanager)
 make policies                      # violações das políticas (Kyverno)
+make rollouts                      # canaries: fase, passo, peso
+make promote|abort|retry SERVICE=<app> NAMESPACE=<ns> [FULL=1]
 make pods [NAMESPACE=<ns>]         # pods dos projetos
 make apps                          # Applications (sync/health)
 make logs     SERVICE=<a> NAMESPACE=<ns>
@@ -95,5 +98,6 @@ curl --resolve demo.treino.local:80:127.0.0.1 http://demo.treino.local/
 | Grafana | https://grafana.devops.local (admin / `devops.local2026`) |
 | Prometheus | https://prometheus.devops.local |
 | Alertmanager | https://alertmanager.devops.local |
+| Rollouts | https://rollouts.devops.local (somente leitura) |
 | crivo | http://develop.crivo.local · http://crivo.local |
 | wlstore | http://develop.wlstore.local · http://wlstore.local |

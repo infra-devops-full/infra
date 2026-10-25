@@ -217,6 +217,27 @@ else
   warn "cluster fora do ar — pulando"
 fi
 
+# --- Entrega progressiva -----------------------------------------------------
+section "Entrega progressiva (Argo Rollouts)"
+if kubectl get deploy -n argo-rollouts argo-rollouts >/dev/null 2>&1; then
+  ok "Argo Rollouts instalado (dashboard: https://rollouts.devops.local)"
+  if kubectl get clusteranalysistemplate platform-canary-error-rate >/dev/null 2>&1; then ok "análise padrão: platform-canary-error-rate"
+  else warn "ClusterAnalysisTemplate platform-canary-error-rate ausente — canaries sem análise"; hint "make apply-argocd"; fi
+  while read -r NS NAME PHASE; do
+    [[ -z "$NAME" ]] && continue
+    case "$PHASE" in
+      Healthy) ;;
+      Degraded) warn "$NS/$NAME: canary ABORTADO (versão estável no ar)"; hint "corrija e publique outra versão, ou make retry SERVICE=$NAME NAMESPACE=$NS" ;;
+      Paused|Progressing) ok "$NS/$NAME: canary em andamento ($PHASE)" ;;
+      *) warn "$NS/$NAME: $PHASE" ;;
+    esac
+  done < <(kubectl get rollouts -A -o jsonpath='{range .items[*]}{.metadata.namespace} {.metadata.name} {.status.phase}{"\n"}{end}' 2>/dev/null)
+elif kubectl version >/dev/null 2>&1; then
+  if grep -qs "enabled: true" <(grep -A1 -h "^rollout:" "$INFRA_ROOT"/projects/*/apps/*/values*.yaml); then
+    err "há apps com rollout.enabled, mas o Argo Rollouts não está instalado"; hint "make delivery"
+  else warn "Argo Rollouts não instalado"; hint "make delivery"; fi
+fi
+
 # --- GitHub ------------------------------------------------------------------
 section "GitHub (repos dos apps)"
 slug() { sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##; s#/$##' <<<"$1"; }

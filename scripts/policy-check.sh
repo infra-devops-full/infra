@@ -3,7 +3,8 @@
 # policy-check.sh  (genérico)
 # -----------------------------------------------------------------------------
 # Testa as políticas do Kyverno (k8s/kyverno-pod-policies.yaml) contra TODOS
-# os apps renderizados (charts/app × projects/<p>/apps/<app>/values-<env>.yaml)
+# os apps renderizados (charts/app × projects/<p>/apps/<app>/values-<env>.yaml;
+# Rollouts são testados como Deployment — o pod é o mesmo)
 # SEM cluster — o mesmo veredito que o cluster daria no sync do ArgoCD, mas
 # antes do commit (make policy-check) e no CI (validate.yml).
 #
@@ -33,7 +34,9 @@ for f in projects/*/apps/*/values-*.yaml; do
   helm template "$app" charts/app --namespace "$ns" \
     -f "$dir/values.yaml" -f "$f" \
     --set "app.name=$app,app.environment=$env,app.project=$proj" \
-    | yq "select(.kind == \"Deployment\") | .metadata.namespace = \"$ns\"" \
+    | yq "select(.kind == \"Deployment\" or .kind == \"Rollout\")
+          | .metadata.namespace = \"$ns\"
+          | .apiVersion = \"apps/v1\" | .kind = \"Deployment\" | del(.spec.strategy)" \
     > "$WORK/resources/$proj-$app-$env.yaml"
   case " $namespaces " in
     *" $ns "*) ;;

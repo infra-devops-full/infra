@@ -34,6 +34,8 @@ depois do conserto).
 | `AppDown` | critical | Deployment com 0 réplicas prontas por 5 min | fora do ar (vale também para postgres/redis/rabbitmq) |
 | `ArgoAppDegraded` | warning | Application `Degraded`/`Missing`/`Unknown` por 10 min | o deploy não ficou saudável |
 | `ArgoAppOutOfSync` | warning | Application fora de sincronia por 30 min | o cluster não bate com o Git |
+| `RolloutAborted` | warning | canary abortado (análise reprovou ou não ficou pronto) | versão estável no ar; corrigir e publicar outra ([runbook](15-entrega-progressiva.md#rolloutaborted)) |
+| `RolloutStuckPaused` | warning | canary pausado há 1h | aprovação manual esquecida |
 
 Os alertas de burn exigem um mínimo de tráfego (~10 requests/h): com 2
 requests, 1 erro já seria 50%.

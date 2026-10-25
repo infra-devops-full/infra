@@ -9,6 +9,11 @@ spec:
   selector:
     matchLabels:
       {{- include "app.selectorLabels" . | nindent 6 }}
+    # O Service -canary (Rollout) tem os mesmos labels: não coletar duas vezes.
+    matchExpressions:
+      - key: devops-platform/service-role
+        operator: NotIn
+        values: [canary]
   endpoints:
     - port: http
       path: {{ .Values.metrics.path }}

@@ -40,7 +40,7 @@ SUDO=""
 render_block() {
   echo "$BEGIN"
   echo "# Ferramentas"
-  for h in argocd grafana prometheus alertmanager; do
+  for h in argocd grafana prometheus alertmanager rollouts; do
     echo "127.0.0.1 ${h}.devops.local"
   done
   for PROJ in $(project_names); do

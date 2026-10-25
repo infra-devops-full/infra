@@ -69,6 +69,15 @@ treinar o diagnóstico, veja [11-treino-quebre-e-conserte.md](11-treino-quebre-e
 | timeout entre apps de namespaces diferentes | NetworkPolicy default-deny | esperado; detalhes em [14-seguranca.md](14-seguranca.md) |
 | `would violate PodSecurity "restricted:latest"` no apply | aviso (não erro) do perfil restricted | roteiro de endurecimento; não bloqueia |
 
+## Canary (Argo Rollouts)
+
+| Sintoma | Causa | Solução |
+| ------- | ----- | ------- |
+| Application *Degraded*, Rollout `Degraded` | canary abortado: o tráfego já voltou para a estável | corrigir e publicar outra versão, ou reverter o commit de deploy ([15](15-entrega-progressiva.md)) |
+| canary ruim **passou** na análise | ninguém chamou o app durante os passos (análise sem dados passa) | tráfego real ou sintético durante o deploy |
+| deploy em prod demora ~5 min | são os passos do canary (20% → 2 min → 50% → 2 min) | esperado; `make promote` pula uma pausa |
+| `rollouts.devops.local` não abre | host novo fora do `/etc/hosts` | `make hosts` |
+
 ## Alertas
 
 | Sintoma | Causa | Solução |

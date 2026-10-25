@@ -1,0 +1,12 @@
+# =============================================================================
+# Treino, exercício 19 (docs/11-treino-quebre-e-conserte.md): o demo como
+# Rollout canary, com pausas de 1 min em vez de 2 (make lab-canary).
+# Aplicado POR CIMA de demo-values.yaml.
+# =============================================================================
+rollout:
+  enabled: true
+  steps:
+    - setWeight: 20
+    - pause: { duration: 1m }
+    - setWeight: 50
+    - pause: { duration: 1m }

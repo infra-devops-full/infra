@@ -92,6 +92,13 @@ Outros campos do chart: `ingress.enabled/host/path`, `autoscaling` (HPA),
 `extraVolumes`. Os defaults estão em
 [`charts/app/values.yaml`](../charts/app/values.yaml).
 
+### Canary em prod
+
+Os `values-prod.yaml` têm `rollout.enabled: true`: em vez de um Deployment, o
+chart gera um Rollout do Argo Rollouts (20% → 50% → 100% dos requests, com
+análise de 5xx). Passos, limite de erro e aprovação manual são ajustáveis
+por app. Veja [15-entrega-progressiva.md](15-entrega-progressiva.md).
+
 ## Adicionar…
 
 | Quero adicionar | Passos |

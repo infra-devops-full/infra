@@ -45,8 +45,10 @@ kinds_available() {
   local gv kind
   while IFS=' ' read -r gv kind; do
     [[ -z "$kind" ]] && continue
-    kubectl api-resources --api-group="$(sed -E 's#/?v[0-9]+[a-z0-9]*$##' <<<"$gv")" -o name 2>/dev/null \
-      | grep -qi "^$(tr '[:upper:]' '[:lower:]' <<<"$kind")" || { echo "$gv/$kind"; return 1; }
+    # Última coluna do api-resources = KIND (compara exato: o nome do recurso
+    # é plural e irregular — ValidatingPolicy → validatingpolicies).
+    kubectl api-resources --api-group="$(sed -E 's#/?v[0-9]+[a-z0-9]*$##' <<<"$gv")" --no-headers 2>/dev/null \
+      | awk '{print $NF}' | grep -qx "$kind" || { echo "$gv/$kind"; return 1; }
   done < <(yq -N 'select(.kind != null) | .apiVersion + " " + .kind' "$1" | sort -u)
 }
 

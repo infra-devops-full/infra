@@ -1,0 +1,35 @@
+# =============================================================================
+# Argo Rollouts — values do lab. Aplicado por scripts/setup-delivery.sh.
+# Estratégia e análise dos apps: charts/app (rollout:) e
+# k8s/rollouts-analysis.yaml.
+# =============================================================================
+controller:
+  replicas: 1          # lab; em produção, 2 (com leader election)
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits:   { memory: 256Mi }
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true    # rollout_info / analysis_run_* no Prometheus (alerta RolloutAborted)
+
+# Dashboard: visualiza passos, pesos, análises e réplicas de cada Rollout.
+# Sem autenticação → somente leitura; promover/abortar é pelo CLI
+# (make promote / make abort), que passa pelo RBAC do kubectl.
+dashboard:
+  enabled: true
+  readonly: true
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits:   { memory: 128Mi }
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: platform-ca
+      cert-manager.io/usages: "digital signature,key encipherment,server auth"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts: [rollouts.devops.local]
+    tls:
+      - secretName: rollouts-tls
+        hosts: [rollouts.devops.local]
