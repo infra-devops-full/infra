@@ -11,8 +11,19 @@
 # Fluxo de branches → ambientes:
 #   feature/*  ──PR──►  develop  ──PR──►  main
 #      │                   │                │
-#   PR: test + build    push: + deploy   push: + deploy
-#   (validação)           em develop       em prod
+#   PR: test + build    push: test +      push: PROMOVE a imagem já testada
+#   (validação)         build + deploy    na develop para prod (sem rebuild)
+#                       em develop
+#
+# Uma execução por mudança, não três:
+#   - PR develop → main NÃO roda este workflow: o head do PR é o mesmo commit
+#     que o push na develop já validou, e o check `ci` desse commit vale para
+#     o PR (checks são por commit, não por evento).
+#   - push na main (merge) promove: para cada app afetado, se a imagem que
+#     está em develop (values-develop.yaml no repo de infra) foi buildada de um
+#     commit que está na main e o código do app não mudou desde então, prod
+#     recebe ESSA tag. Mesma imagem testada, escaneada e rodada em develop.
+#     Se não der para provar isso, builda (fallback seguro).
 #
 # Só os apps AFETADOS pelo push são testados/buildados/deployados (campo
 # `paths`). Buildam TODOS: workflow_dispatch, primeiro push de uma branch e
@@ -33,8 +44,9 @@ name: build-and-deploy
 on:
   push:
     branches: [develop, main]
+  # Só PRs para a develop (features). PR develop → main usa o `ci` do push.
   pull_request:
-    branches: [develop, main]
+    branches: [develop]
   workflow_dispatch:
 
 env:
@@ -70,6 +82,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       apps: ${{ steps.plan.outputs.apps }}
+      promote: ${{ steps.plan.outputs.promote }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -86,6 +99,8 @@ jobs:
           # setup:      toolchain dos testes: node | pnpm | java | "" (nenhuma)
           # test:       comando de lint/testes, rodado na raiz do repo
           #             ("" = sem testes; o build ainda roda)
+          # promote:    opcional, false = sempre rebuilda na main (use se o
+          #             build embute algo do ambiente, ex. build-arg de prod)
           APPS_JSON: |
             [
               {
@@ -99,6 +114,7 @@ jobs:
               }
             ]
           EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
           BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -118,13 +134,41 @@ jobs:
               changed = None
           def affected(a):
               return changed is None or any(f.startswith(p) for f in changed for p in a["paths"])
-          selected = [{k: v for k, v in a.items() if k != "paths"} for a in apps if affected(a)]
+          targets = [a for a in apps if affected(a)]
+
+          # Promoção (push na main): reaproveita a imagem que está em develop
+          # se ela veio de um commit já na main e o app não mudou desde então.
+          def ok(*cmd):
+              return subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+          def develop_tag(app):
+              url = "https://raw.githubusercontent.com/{}/{}/projects/{}/apps/{}/values-develop.yaml".format(
+                  os.environ["INFRA_REPO"], os.environ["INFRA_BRANCH"], os.environ["INFRA_PROJECT"], app)
+              r = subprocess.run(f"curl -fsSL '{url}' | yq '.image.tag'", shell=True, capture_output=True, text=True)
+              return r.stdout.strip() if r.returncode == 0 else ""
+          promote = {}
+          if os.environ["EVENT"] == "push" and os.environ["REF_NAME"] == "main":
+              to_build = []
+              for a in targets:
+                  tag = develop_tag(a["app"]) if a.get("promote", True) else ""
+                  sha = tag[4:] if tag.startswith("sha-") else ""
+                  if (sha and ok("git", "cat-file", "-e", sha + "^{commit}")
+                          and ok("git", "merge-base", "--is-ancestor", sha, "HEAD")
+                          and ok("git", "diff", "--quiet", sha, "HEAD", "--", *a["paths"])):
+                      promote[a["app"]] = tag
+                      print(f"promove {a['app']}: {tag} (a mesma imagem de develop)")
+                  else:
+                      print(f"builda {a['app']}: imagem de develop ({tag or '?'}) não corresponde a este código")
+                      to_build.append(a)
+              targets = to_build
+
+          selected = [{k: v for k, v in a.items() if k not in ("paths", "promote")} for a in targets]
           names = " ".join(a["app"] for a in selected)
           print("arquivos alterados:", "todos" if changed is None else len(changed))
-          print("apps afetados:", names or "nenhum")
+          print("apps a buildar:", names or "nenhum")
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               out.write("matrix=" + json.dumps({"include": selected}) + "\n")
               out.write("apps=" + names + "\n")
+              out.write("promote=" + json.dumps(promote) + "\n")
           PY
 
   # Lint + testes de cada app afetado. Bloqueia build e deploy se falhar.
@@ -283,14 +327,20 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
   deploy:
-    needs: [plan, build]
-    if: github.event_name != 'pull_request' && needs.plan.outputs.apps != ''
+    needs: [plan, test, build]
+    # Roda com build "skipped" (só promoção), nunca com falha/cancelamento.
+    if: >-
+      always() && github.event_name != 'pull_request' &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+      (needs.plan.outputs.apps != '' || needs.plan.outputs.promote != '{}')
     runs-on: ubuntu-latest
     # Evita dois pushes simultâneos no repo de infra.
     concurrency: infra-${{ github.repository }}
     env:
-      # Só os apps buildados neste run — os outros mantêm a tag atual.
+      # Buildados neste run (tag sha-<commit>) e promovidos (tag de develop);
+      # os outros apps mantêm a tag atual.
       APPS: ${{ needs.plan.outputs.apps }}
+      PROMOTE: ${{ needs.plan.outputs.promote }}
     steps:
       - name: Confere o INFRA_DEPLOY_KEY
         env:
@@ -309,12 +359,17 @@ jobs:
 
       - name: Atualiza image.tag no repo de infra
         run: |
-          TAG="sha-${GITHUB_SHA::7}"
-          for APP in $APPS; do
-            FILE="projects/${INFRA_PROJECT}/apps/${APP}/values-${DEPLOY_ENV}.yaml"
-            yq -i ".image.tag = \"${TAG}\"" "$FILE"
-            echo "→ $FILE: image.tag=${TAG}"
-          done
+          set_tag() {
+            FILE="projects/${INFRA_PROJECT}/apps/$1/values-${DEPLOY_ENV}.yaml"
+            yq -i ".image.tag = \"$2\"" "$FILE"
+            echo "→ $FILE: image.tag=$2"
+            SUMMARY="${SUMMARY:+$SUMMARY }$1@$2"
+          }
+          for APP in $APPS; do set_tag "$APP" "sha-${GITHUB_SHA::7}"; done
+          while IFS='=' read -r APP TAG; do
+            [ -n "$APP" ] && set_tag "$APP" "$TAG"
+          done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$PROMOTE")
+          echo "SUMMARY=$SUMMARY" >> "$GITHUB_ENV"
 
       - name: Commit + push
         run: |
@@ -322,7 +377,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add projects/
           if git diff --cached --quiet; then echo "Nada a atualizar"; exit 0; fi
-          git commit -m "deploy(${INFRA_PROJECT}/${DEPLOY_ENV}): ${APPS} → sha-${GITHUB_SHA::7} [skip ci]"
+          git commit -m "deploy(${INFRA_PROJECT}/${DEPLOY_ENV}): ${SUMMARY} [skip ci]"
           for i in 1 2 3; do
             git pull --rebase origin "$INFRA_BRANCH" && git push origin "HEAD:$INFRA_BRANCH" && exit 0
             sleep $((i * 5))
