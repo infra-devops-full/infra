@@ -11,9 +11,6 @@
 # → front: <env>.wlstore.local
 # → APIs: <env>.<app>.wlstore.local
 #
-# Migração em andamento: shell, catalog-mfe e pricing-mfe (monorepo antigo)
-# só existem no prod, até a promoção do wlstore-fe para a main.
-#
 # Serviços ainda não implementados (identity, inventory, notification, order,
 # payment, discovery-server) ficam de fora: para incluir um, crie
 # apps/<serviço>/ com values.yaml + values-<env>.yaml e o banco em extraDbs.
