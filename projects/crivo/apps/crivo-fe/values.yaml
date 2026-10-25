@@ -8,7 +8,7 @@
 # e middleware), nunca pelo navegador.
 
 image:
-  repository: ghcr.io/geraldobl58/crivo/crivo-fe
+  repository: ghcr.io/crivo-sync/crivo/crivo-fe
   pullPolicy: IfNotPresent
 
 service:

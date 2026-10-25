@@ -15,7 +15,7 @@
 description: "Crivo — API NestJS (crivo-be) e front Next.js (crivo-fe)"
 
 # Código da aplicação (documentação — quem builda é o CI desse repo).
-appRepo: https://github.com/geraldobl58/crivo
+appRepo: https://github.com/crivo-sync/crivo
 
 # Postgres por ambiente → Secret `postgres` (DATABASE_URL, JDBC_URL, DB_*).
 # A SENHA não fica aqui: é gerada e selada por `make seal` (sealed/<env>/).

@@ -5,7 +5,7 @@
 image:
   # Publicada pelo CI do repo crivo (.github/workflows/deploy.yml), a partir
   # do Dockerfile da raiz do repo (o mesmo usado no Fly.io).
-  repository: ghcr.io/geraldobl58/crivo/crivo-be
+  repository: ghcr.io/crivo-sync/crivo/crivo-be
   pullPolicy: IfNotPresent
 
 service:
