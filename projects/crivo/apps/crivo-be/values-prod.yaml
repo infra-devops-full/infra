@@ -1,10 +1,9 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
-  tag: sha-4646f89
+  tag: sha-6675c23
 env:
   PUBLIC_APP_URL: http://crivo.local
   CORS_ORIGINS: http://crivo.local
-
 # Canary (Argo Rollouts): a versão nova recebe 20% e depois 50% dos requests,
 # com análise de 5xx no Prometheus; reprovou → volta sozinha. docs/15-entrega-progressiva.md
 rollout:
