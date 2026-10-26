@@ -35,5 +35,6 @@ step "ArgoCD Notifications: deploys → #deploys"
 helm upgrade argocd argo/argo-cd --version "$(installed_chart_version argocd argocd)" -n argocd \
   --reuse-values -f "$CFG/argocd-notifications-values.yaml" --timeout 5m --wait >/dev/null
 kubectl -n argocd rollout restart deploy/argocd-notifications-controller >/dev/null
+kubectl -n argocd rollout status deploy/argocd-notifications-controller --timeout=120s >/dev/null
 
 echo -e "\033[0;32m✅ Notificações prontas.\033[0m Teste: make notify-test"

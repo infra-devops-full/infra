@@ -61,6 +61,10 @@ Projeto: crivo   Versão: 1.4.0   Revisão da infra: e948ba8
 > **Na primeira ativação** o `#deploys` recebe um "deploy" de cada app: o
 > ArgoCD nunca tinha notificado a revisão atual deles. Acontece uma vez só.
 
+> **Cuidado:** `argocd admin notifications template notify …` imprime, em
+> log debug, a URL completa do webhook. Use `make notify-test`, que confere
+> a resposta e mascara a URL.
+
 > **URL de webhook vazada** (colada em chat, print, commit): no Discord,
 > *Excluir Webhook* e crie outro; depois `make notifications-webhooks` e
 > commit.
@@ -100,4 +104,5 @@ notificações.
 | alerta aparece no Alertmanager mas não no Discord | rota não casou (ex.: severidade `info`) | `amtool config routes test` (ver docs/13) |
 | Discord recusa (log do Alertmanager: `400`) | mensagem passou do limite (4096) | menos alertas por grupo (`group_by`) ou encurtar o template |
 | `#deploys` silencioso num deploy | a revisão já tinha sido notificada (uma vez por revisão) | esperado |
+| `make notify-test` falhou logo após `make notifications` | o controller do ArgoCD estava reiniciando | rodar de novo (o script atual espera o rollout) |
 | alerta falso de um namespace de infra | namespace fora da lista de exclusão das regras | `INFRA` em `scripts/dev/gen-prometheus-rules.py` + `make gen-observability` |

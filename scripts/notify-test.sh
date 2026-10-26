@@ -22,9 +22,17 @@ echo "✅ alertas de teste enviados ao Alertmanager (#alertas e #alertas-develop
 
 APP="$(kubectl get applications -n argocd -l devops-platform/kind=app,devops-platform/env=prod -o name | head -1 | sed 's#.*/##')"
 if [[ -n "$APP" ]] && kubectl -n argocd get deploy argocd-notifications-controller >/dev/null 2>&1; then
-  kubectl -n argocd exec deploy/argocd-notifications-controller -- \
-    argocd admin notifications template notify app-deployed "$APP" --recipient discord-deploys >/dev/null 2>&1
-  echo "✅ mensagem de deploy de teste ($APP) enviada ao #deploys"
+  kubectl -n argocd rollout status deploy/argocd-notifications-controller --timeout=120s >/dev/null
+  # A saída deste comando (log debug) contém a URL do webhook: nunca imprimir crua.
+  OUT="$(kubectl -n argocd exec deploy/argocd-notifications-controller -- \
+    argocd admin notifications template notify app-deployed "$APP" --recipient discord-deploys 2>&1 || true)"
+  if grep -q 'Received response: HTTP/1.1 2' <<<"$OUT"; then
+    echo "✅ mensagem de deploy de teste ($APP) enviada ao #deploys"
+  else
+    echo "❌ o #deploys não aceitou a mensagem:"
+    grep -v '"level":"debug"' <<<"$OUT" | sed -E 's#https://(discord(app)?\.com)/api/webhooks/[^ "]+#https://\1/api/webhooks/***#g' | tail -5
+    exit 1
+  fi
 else
   echo "↷ ArgoCD Notifications não instalado: make notifications"
 fi
