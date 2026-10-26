@@ -1,6 +1,6 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
-  tag: sha-6675c23
+  tag: 1.0.0
 env:
   PUBLIC_APP_URL: http://crivo.local
   CORS_ORIGINS: http://crivo.local
