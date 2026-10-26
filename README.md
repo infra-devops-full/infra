@@ -802,3 +802,19 @@ make abort   SERVICE=<app> NAMESPACE=<ns>      # volta para a estável
 
 Dashboard: https://rollouts.devops.local (rode `make hosts` uma vez).
 Detalhes e runbooks: [docs/15-entrega-progressiva.md](docs/15-entrega-progressiva.md).
+
+## 16. Releases e rollback
+
+Prod só recebe **versões**. O merge na `main` é o candidato; a release
+calcula a versão pelos commits (`feat` → minor, `fix` → patch, `!` → major),
+gera o changelog, publica a **mesma imagem** testada em develop como `:1.4.0`
+e põe essa versão em prod (com canary).
+
+```bash
+make release  PROJECT=crivo                       # ou Actions → release → Run workflow
+make rollback PROJECT=crivo ENV=prod [APP=<app>]  # volta pelo Git; imediato em prod
+make abort    SERVICE=<app> NAMESPACE=<ns>        # durante o canary: volta na hora
+```
+
+O botão *Rollback* do ArgoCD fica bloqueado com auto-sync (o Git manda); por
+quê e quando usar cada opção: [docs/16-releases.md](docs/16-releases.md).

@@ -37,5 +37,7 @@ e um exercício.
 | 3 | **Alertas + SLOs**: SLO de 99,5% por app, alertas multi-burn-rate, latência, app fora, ArgoCD; dashboard de SLO; notificação pronta para plugar | ✅ feito |
 | 4 | **HTTPS + NetworkPolicy + Kyverno**: Kubernetes 1.34, cert-manager com CA local, default-deny por namespace, Pod Security, políticas de admissão testadas no CI | ✅ feito |
 | 5 | **Argo Rollouts**: canary em prod (20% → 50% → 100%) com análise de 5xx no Prometheus e rollback automático | ✅ feito |
-| 6 | **Tracing**: OpenTelemetry + Tempo (front → API → RabbitMQ → serviço) | próximo |
+| 5.1 | **Releases**: versão semântica, changelog, prod só por release (mesma imagem de develop), `make rollback` | ✅ feito |
+| 5.2 | **SSO e RBAC**: login único no ArgoCD e no Grafana, permissões por time | próximo |
+| 6 | **Tracing**: OpenTelemetry + Tempo (front → API → RabbitMQ → serviço) | |
 | 7 | **Nuvem**: Terraform, cluster de prod separado, banco gerenciado, DNS/TLS reais, backup (Velero); guia para AWS, DigitalOcean e VPS | |

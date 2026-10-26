@@ -1,6 +1,7 @@
 .PHONY: help setup start stop restart destroy status logs k9s grafana prometheus alertmanager argocd alerts gen-observability \
         security trust-ca untrust-ca policies policy-check \
         delivery rollouts promote abort retry lab-canary \
+        release rollback \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -134,6 +135,22 @@ policies: ## Violações das políticas do Kyverno nos projetos (PolicyReports)
 
 policy-check: ## Testa as políticas do Kyverno contra todos os apps renderizados (sem cluster)
 	@./scripts/policy-check.sh
+
+release: ## Publica uma versão em prod (Actions → release). Uso: make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto|patch|minor|major] [VERSION=X.Y.Z]
+	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto] [VERSION=X.Y.Z]$(RESET)"; exit 1; fi
+	@REPOS="$$(bash -c 'source scripts/lib-project.sh; project_app_repos $(PROJECT)' | sed -E 's#https://github.com/##; s#\.git$$##')"; \
+	REPO="$(REPO)"; \
+	if [ -z "$$REPO" ]; then \
+		if [ "$$(echo "$$REPOS" | wc -l | tr -d ' ')" != "1" ]; then \
+			echo "$(YELLOW)⚠️  $(PROJECT) tem mais de um repo; escolha com REPO=:$(RESET)"; echo "$$REPOS" | sed 's/^/   /'; exit 1; \
+		fi; REPO="$$REPOS"; \
+	fi; \
+	gh workflow run release.yml -R "$$REPO" --ref main -f bump="$(or $(BUMP),auto)" -f version="$(VERSION)" && \
+	echo "$(GREEN)✅ release disparada em $$REPO$(RESET) — acompanhe em https://github.com/$$REPO/actions/workflows/release.yml"
+
+rollback: ## Volta prod/develop para a versão anterior PELO GIT. Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]
+	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then echo "$(YELLOW)⚠️  Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]$(RESET)"; exit 1; fi
+	@./scripts/rollback.sh $(PROJECT) $(ENV) $(if $(APP),--app $(APP)) $(if $(TO),--to $(TO))
 
 delivery: ## Instala/atualiza o Argo Rollouts (canary) e a análise padrão (cluster existente)
 	@./scripts/setup-delivery.sh

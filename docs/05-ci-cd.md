@@ -3,11 +3,11 @@
 ## Branches e ambientes
 
 ```
-feature/x ──PR──► develop ──PR──► main
-   │                 │              │
-PR: test+build    push: test +   push: PROMOVE a imagem
-(validação)       build + deploy  de develop para prod
-                  em develop      (sem rebuild)
+feature/x ──PR──► develop ──PR──► main ──release──► prod
+   │                 │              │                 │
+PR: test+build    push: test +   merge: só      versão 1.4.0 com a mesma
+(validação)       build + deploy  CodeQL         imagem de develop
+                  em develop     (candidato)     (docs/16-releases.md)
 ```
 
 - **develop** = ambiente de teste. Merge ou push direto disparam o deploy em
@@ -24,20 +24,17 @@ PR: test+build    push: test +   push: PROMOVE a imagem
 | PR feature → develop | test + build (valida) | — |
 | push/merge na develop | test + build + deploy em develop | — |
 | PR develop → main | **não roda** | roda (default setup do GitHub) |
-| merge na main | **promove** (~1 min, sem test/build) | roda |
+| merge na main | **não roda** (main = candidato a release) | roda |
+| **release** (Run workflow) | `release.yml`: versão, changelog, mesma imagem → prod | — |
 
 - **PR develop → main não roda o pipeline:** o head do PR é o mesmo commit
   que o push na develop já testou e buildou. A proteção da main exige o check
   `ci` *daquele commit*, e ele já existe (checks são por commit, não por
   evento). Por isso também não dá para abrir PR de uma feature direto para a
   main: o `ci` nunca aparece. O caminho é sempre feature → develop → main.
-- **Promoção ("build once, deploy many"):** no merge, para cada app afetado,
-  o `plan` lê a tag que está em `values-develop.yaml` (repo de infra). Se essa
-  imagem veio de um commit que já está na main **e** o código do app não mudou
-  desde então, prod recebe exatamente essa tag: a mesma imagem que foi
-  testada, escaneada pelo Trivy e rodou em develop. Se algo não bate (develop
-  andou na frente, hotfix direto na main...), ele builda: o fallback é seguro.
-  App cujo build embute algo do ambiente: `"promote": false` no `APPS_JSON`.
+- **Prod só recebe releases** (`release.yml`): a versão reaproveita a
+  imagem já testada na develop ("build once, deploy many"). Detalhes, hotfix
+  e rollback em [16-releases.md](16-releases.md).
 - **CodeQL** é a varredura de segurança do código, configurada pelo
   `make github` (*default setup*). O GitHub roda no PR e no push da branch
   padrão; não é configurável no default setup, e vale o custo.
@@ -52,7 +49,7 @@ PR: test+build    push: test +   push: PROMOVE a imagem
 | **plan** | compara os arquivos alterados com o `paths` de cada app e escolhe **só os afetados** | — |
 | **test** | prepara a toolchain (`setup`: node, pnpm ou java) e roda o `test` do app | **sim** |
 | **build** | imagem amd64 → **Trivy** (relatório; gate opcional) → imagem multi-arch → GHCR (só em push) | se o `TRIVY_GATE` estiver ligado |
-| **deploy** | commita `image.tag` no `values-<env>.yaml` do repo de infra (deploy key): `sha-<commit>` se buildou, ou a tag de develop se promoveu | — |
+| **deploy** | commita `image.tag = sha-<commit>` no `values-develop.yaml` do repo de infra (deploy key); prod recebe versões pelo `release.yml` | — |
 | **ci** | resume plan, test e build num check só: o que a `main` exige (o do push na develop vale para o PR develop → main) | **sim** |
 
 Buildam **todos** os apps: `workflow_dispatch`, o primeiro push de uma branch
@@ -79,7 +76,6 @@ e mudanças em `.github/workflows/`.
 | `paths` | prefixos que, alterados, afetam o app (inclua libs compartilhadas e o lockfile) |
 | `setup` | `node` (npm fixo 11.6.2), `pnpm` (10.29.3), `java` (Temurin 21 + cache Maven) ou `""` |
 | `test` | lint + testes, rodado na raiz do repo. **Valide localmente antes**: teste que já falha trava todos os deploys |
-| `promote` | opcional; `false` = sempre rebuilda na main em vez de promover a imagem de develop |
 
 Os testes Java usam **Testcontainers** (Postgres e RabbitMQ reais) e por isso
 rodam direto no runner, que tem Docker.

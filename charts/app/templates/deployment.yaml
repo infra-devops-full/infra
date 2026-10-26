@@ -17,6 +17,10 @@ spec:
   # Versão nova que não fica pronta nesse prazo → aborta e volta à estável.
   progressDeadlineSeconds: {{ .Values.rollout.progressDeadlineSeconds }}
   progressDeadlineAbort: true
+  # Voltar para uma das últimas N versões (rollback) pula os passos do canary:
+  # aquela versão já rodou 100% em produção.
+  rollbackWindow:
+    revisions: {{ .Values.rollout.rollbackWindow }}
   strategy:
     canary:
       stableService: {{ $fullname }}

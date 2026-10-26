@@ -35,6 +35,8 @@ make alerts                        # alertas ativos (Alertmanager)
 make policies                      # violações das políticas (Kyverno)
 make rollouts                      # canaries: fase, passo, peso
 make promote|abort|retry SERVICE=<app> NAMESPACE=<ns> [FULL=1]
+make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto|patch|minor|major]
+make rollback PROJECT=<p> ENV=prod [APP=<app>] [TO=1.3.0]
 make pods [NAMESPACE=<ns>]         # pods dos projetos
 make apps                          # Applications (sync/health)
 make logs     SERVICE=<a> NAMESPACE=<ns>

@@ -56,4 +56,4 @@ jobs:
       - name: actionlint (templates de workflow)
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color \
-            templates/github/deploy.yml .github/workflows/validate.yml
+            templates/github/deploy.yml templates/github/release.yml .github/workflows/validate.yml

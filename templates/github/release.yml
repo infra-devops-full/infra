@@ -1,0 +1,230 @@
+# =============================================================================
+# Release: publica uma VERSÃO em produção. Copie para
+# <repo-do-app>/.github/workflows/release.yml (sem nada para ajustar: lê
+# INFRA_* e APPS_JSON do deploy.yml do mesmo repo).
+#
+# Como usar: Actions → release → Run workflow (branch main) → bump
+#   auto   pelos commits desde a última versão (Conventional Commits):
+#          "feat!:"/"BREAKING CHANGE" → major · "feat:" → minor · resto → patch
+#   patch | minor | major   força o tipo
+#   version                 opcional, versão exata (ex.: 2.0.0)
+# Ou no repo de infra: make release PROJECT=<p> [BUMP=minor]
+#
+# O que acontece:
+#   1. calcula a versão (ex.: 1.4.0) a partir da última tag v*
+#   2. para cada app, acha a imagem JÁ BUILDADA e testada de um commit com o
+#      mesmo código do app (sha-<commit>, vinda da develop) e publica a mesma
+#      imagem como :1.4.0 — sem rebuild ("build once, deploy many")
+#   3. cria a tag v1.4.0 e a GitHub Release com o changelog
+#   4. commita image.tag = 1.4.0 nos values-prod.yaml do repo de infra → o
+#      ArgoCD aplica → canary (Argo Rollouts) em prod
+#
+# Voltar uma versão: make rollback PROJECT=<p> ENV=prod (repo de infra).
+# =============================================================================
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Tipo de versão (auto = pelos commits)"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      version:
+        description: "Versão exata, ex.: 2.0.0 (opcional; ignora o bump)"
+        required: false
+        default: ""
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write    # tag + GitHub Release
+  packages: write    # tag de versão na imagem do GHCR
+
+jobs:
+  release:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configuração (lida do deploy.yml)
+        run: |
+          WF=.github/workflows/deploy.yml
+          for k in INFRA_REPO INFRA_BRANCH INFRA_PROJECT; do
+            echo "$k=$(yq ".env.$k" "$WF")" >> "$GITHUB_ENV"
+          done
+          yq '.jobs.plan.steps[] | select(.id == "plan") | .env.APPS_JSON' "$WF" > /tmp/apps.json
+          jq -r '.[].app' /tmp/apps.json | paste -sd ' ' | sed 's/^/apps: /'
+
+      # Antes de criar qualquer tag: sem a chave, a release ficaria sem deploy.
+      - name: Confere o INFRA_DEPLOY_KEY
+        env:
+          INFRA_DEPLOY_KEY: ${{ secrets.INFRA_DEPLOY_KEY }}
+        run: |
+          if [ -z "$INFRA_DEPLOY_KEY" ]; then
+            echo "::error title=INFRA_DEPLOY_KEY ausente::Rode no repo de infra: make github PROJECT=${INFRA_PROJECT}"
+            exit 1
+          fi
+
+      - name: Versão e changelog
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          EXPLICIT: ${{ inputs.version }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          def git(*a):
+              return subprocess.run(["git", *a], capture_output=True, text=True).stdout.strip()
+          last = git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.[0-9]*")
+          rng = f"{last}..HEAD" if last else "HEAD"
+          log = git("log", rng, "--no-merges", "--format=%h%x1f%s%x1f%b%x1e")
+          commits = [c.split("\x1f") for c in log.split("\x1e") if c.strip()]
+          commits = [(h.strip(), s.strip(), b) for h, s, b in commits]
+          if last and not commits:
+              raise SystemExit(f"::error::nada novo desde {last}: faça merge de develop → main antes")
+
+          conv = re.compile(r"^(\w+)(\([^)]*\))?(!)?:\s*(.+)$")
+          breaking = any((m := conv.match(s)) and m.group(3) or "BREAKING CHANGE" in b for _, s, b in commits)
+          feat = any((m := conv.match(s)) and m.group(1) == "feat" for _, s, _b in commits)
+
+          explicit, bump = os.environ["EXPLICIT"].strip().lstrip("v"), os.environ["BUMP"]
+          if explicit:
+              if not re.fullmatch(r"\d+\.\d+\.\d+", explicit):
+                  raise SystemExit(f"::error::versão inválida: {explicit} (use X.Y.Z)")
+              version = explicit
+          elif not last:
+              version = "1.0.0"       # primeira release: prod já está no ar
+          else:
+              ma, mi, pa = map(int, last.lstrip("v").split("."))
+              if bump == "auto":
+                  bump = "major" if breaking else "minor" if feat else "patch"
+              version = {"major": f"{ma + 1}.0.0", "minor": f"{ma}.{mi + 1}.0", "patch": f"{ma}.{mi}.{pa + 1}"}[bump]
+          if git("tag", "-l", f"v{version}"):
+              raise SystemExit(f"::error::a tag v{version} já existe")
+
+          groups = {"⚠️ Mudanças incompatíveis": [], "✨ Novidades": [], "🐛 Correções": [], "🔧 Outros": []}
+          url = os.environ["REPO_URL"]
+          for h, s, b in commits[:200]:
+              m = conv.match(s)
+              text = m.group(4) if m else s
+              scope = f"**{m.group(2)[1:-1]}:** " if m and m.group(2) else ""
+              line = f"- {scope}{text} ([{h}]({url}/commit/{h}))"
+              if m and (m.group(3) or "BREAKING CHANGE" in b):
+                  groups["⚠️ Mudanças incompatíveis"].append(line)
+              elif m and m.group(1) == "feat":
+                  groups["✨ Novidades"].append(line)
+              elif m and m.group(1) == "fix":
+                  groups["🐛 Correções"].append(line)
+              else:
+                  groups["🔧 Outros"].append(line)
+          notes = [f"Comparação: {url}/compare/{last}...v{version}\n" if last else "Primeira versão publicada.\n"]
+          for title, lines in groups.items():
+              if lines:
+                  notes += [f"### {title}", *lines, ""]
+          with open("/tmp/notes.md", "w") as f:
+              f.write("\n".join(notes))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"version={version}\nprevious={last or '-'}\n")
+          print(f"{last or '(nenhuma)'} → v{version} ({len(commits)} commits)")
+          PY
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Para cada app: o commit mais recente com o MESMO código do app (paths)
+      # que já tem imagem sha-<commit> no GHCR. Essa imagem — testada na
+      # develop — ganha a tag da versão.
+      - name: Imagens da versão (sem rebuild)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          apps = json.load(open("/tmp/apps.json"))
+          base = f"{os.environ['REGISTRY']}/{os.environ['GITHUB_REPOSITORY'].lower()}"
+          def run(*c):
+              return subprocess.run(c, capture_output=True, text=True)
+          missing = []
+          for a in apps:
+              image, src = f"{base}/{a['app']}", None
+              for c in run("git", "rev-list", "--max-count=300", "HEAD").stdout.split():
+                  if run("git", "diff", "--quiet", c, "HEAD", "--", *a["paths"]).returncode != 0:
+                      continue
+                  if run("docker", "buildx", "imagetools", "inspect", f"{image}:sha-{c[:7]}").returncode == 0:
+                      src = f"{image}:sha-{c[:7]}"
+                      break
+              if not src:
+                  missing.append(a["app"])
+                  continue
+              r = run("docker", "buildx", "imagetools", "create", "-t", f"{image}:{os.environ['VERSION']}", src)
+              if r.returncode != 0:
+                  raise SystemExit(f"::error::falha ao publicar {image}:{os.environ['VERSION']}: {r.stderr}")
+              print(f"{a['app']}: {src} → :{os.environ['VERSION']}")
+          if missing:
+              raise SystemExit("::error::sem imagem buildada para o código atual de: " + ", ".join(missing)
+                               + ". Rode o build-and-deploy na develop (ou Run workflow) e tente de novo.")
+          PY
+
+      - name: Tag + GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" --target "$GITHUB_SHA" \
+            --title "v${VERSION}" --notes-file /tmp/notes.md
+
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.INFRA_REPO }}
+          ref: ${{ env.INFRA_BRANCH }}
+          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
+          path: infra
+
+      - name: Deploy em prod (image.tag no repo de infra)
+        working-directory: infra
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for APP in $(jq -r '.[].app' /tmp/apps.json); do
+            FILE="projects/${INFRA_PROJECT}/apps/${APP}/values-prod.yaml"
+            [ -f "$FILE" ] || { echo "↷ $APP sem values-prod.yaml — pulado"; continue; }
+            yq -i ".image.tag = \"${VERSION}\"" "$FILE"
+            echo "→ $FILE: image.tag=${VERSION}"
+          done
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add projects/
+          git diff --cached --quiet && { echo "Nada a atualizar"; exit 0; }
+          git commit -m "release(${INFRA_PROJECT}): ${GITHUB_REPOSITORY#*/} v${VERSION} → prod [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase origin "$INFRA_BRANCH" && git push origin "HEAD:$INFRA_BRANCH" && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
+
+      - name: Resumo
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          {
+            echo "## 🚀 v${VERSION} → prod"
+            echo "Anterior: ${PREVIOUS}. O ArgoCD aplica em até 3 min; o canary leva ~5 min (make rollouts)."
+            echo
+            cat /tmp/notes.md
+          } >> "$GITHUB_STEP_SUMMARY"

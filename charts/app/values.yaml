@@ -100,6 +100,8 @@ rollout:
     template: platform-canary-error-rate
     maxErrorRate: "0.05"     # 5% de 5xx na versão nova = aborta
   progressDeadlineSeconds: 600
+  # Rollback para uma das últimas N versões é imediato (sem canary).
+  rollbackWindow: 3
 
 autoscaling:
   enabled: false
