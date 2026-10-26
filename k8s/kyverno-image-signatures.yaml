@@ -1,0 +1,50 @@
+# =============================================================================
+# Só roda imagem ASSINADA pelo CI da plataforma (cosign keyless / Sigstore).
+#
+# Cada build de imagem (deploy.yml) e cada release (release.yml) assina a
+# imagem com a identidade do próprio workflow, emitida pelo GitHub Actions
+# (OIDC) e registrada no log público do Sigstore — sem chave para guardar.
+# Aqui o Kyverno confere: a assinatura existe e veio do workflow de um repo
+# de projeto (lista gerada de projects/*/project.yaml → appRepo(s) pelo
+# apply-platform.sh em ${SIGNING_SUBJECT_REGEX}).
+#
+# Imagem de fora do ghcr.io (postgres, redis, rabbitmq...) não é verificada.
+# Começa em Audit (relatório): as imagens que já rodavam não eram assinadas.
+# Quando todas forem rebuildadas, troque para [Deny]. docs/19-assinatura-de-imagem.md
+# =============================================================================
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: platform-verify-image-signature
+  annotations:
+    policies.kyverno.io/title: Imagem assinada pelo CI
+    policies.kyverno.io/category: Supply chain
+spec:
+  validationActions: [Audit]
+  validationConfigurations:
+    mutateDigest: false   # não reescreve tag → digest (o ArgoCD veria diferença do Git)
+    verifyDigest: false   # os manifestos usam tag (sha-xxx, 1.4.0)
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - { key: devops-platform/project, operator: Exists }
+  matchImageReferences:
+    - glob: "ghcr.io/*"
+  attestors:
+    - name: platformCI
+      cosign:
+        keyless:
+          identities:
+            - issuer: https://token.actions.githubusercontent.com
+              subjectRegExp: '${SIGNING_SUBJECT_REGEX}'
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.platformCI])).all(e, e > 0)
+      message: >-
+        Imagem sem assinatura do CI da plataforma (cosign keyless do deploy.yml
+        ou release.yml de um repo de projeto). Veja docs/19-assinatura-de-imagem.md.

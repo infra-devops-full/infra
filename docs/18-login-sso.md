@@ -132,6 +132,9 @@ login.
 | Sintoma | Causa | Solução |
 | ------- | ----- | ------- |
 | `make sso` só mostra instruções | OAuth App não selado | passos 2 e 3 |
+| Dex: "Internal Server Error — Authentication failed"; log do Dex (`kubectl -n auth logs deploy/dex`): `user not in org or application not authorized to read org data` | o OAuth App não tem acesso às orgs (restrição de apps de terceiros) | como dono da org: https://github.com/settings/connections/applications/<Client ID> → **Grant** em cada org; ou *Org → Settings → Third-party access → OAuth app policy* |
+| log do Dex: `bad_verification_code` | voltou ou recarregou a página no meio do login (o código do GitHub vale uma vez) | começar o login de novo |
+| dashboard do Rollouts: "Failed to fetch" | sem sessão (login falhou ou expirou): as chamadas da página são redirecionadas para o login | recarregar a página e entrar de novo |
 | GitHub: "redirect_uri is not associated with this application" | callback URL diferente | `https://auth.devops.local/callback`, exatamente |
 | entrou, mas só com leitura | time não reconhecido: org sem *Grant* para o app, ou time com outro nome | GitHub → Settings → Applications → o app → Grant na org; conferir o slug do time |
 | ArgoCD: "failed to verify token" / erro de certificado | pod sem a CA ou sem DNS interno | `make security` (trust-manager + CoreDNS) e `make sso` |

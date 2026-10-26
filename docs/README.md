@@ -17,6 +17,7 @@ material de estudo e treino.
 | [07-scripts.md](07-scripts.md) | o que cada script e cada comando do Makefile faz, e como se encadeiam |
 | [08-troubleshooting.md](08-troubleshooting.md) | problemas reais que já aconteceram, com causa e solução |
 | [09-cheatsheet.md](09-cheatsheet.md) | comandos `make`, `kubectl` e `git` do dia a dia |
+| [19-assinatura-de-imagem.md](19-assinatura-de-imagem.md) | cosign keyless no CI, SBOM atestado, Kyverno verificando a assinatura, `make verify-image` |
 | [18-login-sso.md](18-login-sso.md) | login único com GitHub (Dex + oauth2-proxy), perfis admin/dev/leitura por time, configurar e dar acesso |
 | [17-variaveis-de-ambiente.md](17-variaveis-de-ambiente.md) | `.env` nos repos, config × segredo, `values` × `make seal`, cuidado com `NEXT_PUBLIC_*`, validação na subida |
 | [16-releases.md](16-releases.md) | versões (`make release`), changelog, hotfix e rollback (`make rollback`, abort e por que não o botão do ArgoCD) |

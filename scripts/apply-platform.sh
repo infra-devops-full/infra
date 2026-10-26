@@ -29,7 +29,12 @@ INFRA_BRANCH="${INFRA_BRANCH:-main}"
 # Arquivos do repo de infra servidos pelo GitHub (logos dos projetos no Grafana).
 INFRA_SLUG="$(sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##; s#/$##' <<<"$INFRA_REPO_URL")"
 INFRA_RAW_URL="https://raw.githubusercontent.com/${INFRA_SLUG}/${INFRA_BRANCH}"
-export INFRA_REPO_URL INFRA_BRANCH INFRA_RAW_URL
+# Quem pode assinar imagens (k8s/kyverno-image-signatures.yaml): os workflows
+# deploy.yml/release.yml dos repos de app declarados em projects/.
+SIGNING_REPOS="$(for P in $(project_names); do project_app_repos "$P"; done \
+  | sed -E 's#^https://github.com/##; s#\.git$##; s#/$##' | sort -u | sed 's/[.]/\\./g' | paste -sd '|' -)"
+SIGNING_SUBJECT_REGEX="^https://github\\.com/(${SIGNING_REPOS})/\\.github/workflows/(deploy|release)\\.yml@refs/.+\$"
+export INFRA_REPO_URL INFRA_BRANCH INFRA_RAW_URL SIGNING_SUBJECT_REGEX
 
 if [[ -z "$INFRA_REPO_URL" ]]; then
   echo "❌ INFRA_REPO_URL vazio (defina no .env ou configure o git remote origin)"
@@ -66,7 +71,7 @@ render() {
       continue
     fi
     echo "---"
-    envsubst '${INFRA_RAW_URL}' < "$f"
+    envsubst '${INFRA_RAW_URL} ${SIGNING_SUBJECT_REGEX}' < "$f"
   done
 }
 

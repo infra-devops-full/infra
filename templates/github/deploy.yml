@@ -200,6 +200,7 @@ jobs:
       contents: read
       packages: write
       security-events: write   # resultado do Trivy na aba Security
+      id-token: write          # identidade do workflow para assinar (cosign keyless)
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -281,6 +282,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v7
+        id: push
         if: env.PUBLISH == 'true'
         with:
           context: ${{ matrix.context }}
@@ -295,6 +297,39 @@ jobs:
             ${{ steps.img.outputs.name }}:${{ steps.img.outputs.channel }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      # 5) Assinatura keyless (Sigstore): o GitHub emite a identidade deste
+      #    workflow, o cosign assina o digest e registra no log público. O
+      #    Kyverno do cluster só aceita imagem com essa assinatura
+      #    (k8s/kyverno-image-signatures.yaml). cosign v2: formato .sig.
+      - uses: sigstore/cosign-installer@v4.1.2
+        if: env.PUBLISH == 'true'
+        with:
+          cosign-release: v2.6.5
+
+      - name: Assina a imagem (cosign keyless)
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.img.outputs.name }}@${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMAGE"
+
+      # 6) SBOM: a lista de componentes da imagem (pacotes do SO e libs),
+      #    anexada como atestado assinado. Responde "estamos usando a lib X
+      #    vulnerável?" sem baixar a imagem.
+      - uses: anchore/sbom-action@v0.24.3
+        if: env.PUBLISH == 'true'
+        with:
+          image: ${{ steps.img.outputs.name }}@${{ steps.push.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Atesta o SBOM na imagem
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE: ${{ steps.img.outputs.name }}@${{ steps.push.outputs.digest }}
+        run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$IMAGE"
 
   deploy:
     needs: [plan, test, build]

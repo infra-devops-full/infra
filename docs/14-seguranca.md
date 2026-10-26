@@ -171,6 +171,12 @@ Policy platform-disallow-latest failed: Use uma tag imutável na imagem
    se liga uma regra sem quebrar quem já está rodando.
 3. `make policy-check`, commit, `make apply-argocd`.
 
+## 4. Assinatura de imagem
+
+O CI assina cada imagem (cosign keyless) e anexa o SBOM; o Kyverno confere
+que a imagem saiu do workflow de um repo de projeto. Detalhes:
+[19-assinatura-de-imagem.md](19-assinatura-de-imagem.md).
+
 ## Arquivos
 
 | Arquivo | O quê |

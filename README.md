@@ -833,3 +833,17 @@ make sso          # Dex + oauth2-proxy + login nas ferramentas
 
 Passo a passo (times, OAuth App, primeiro login):
 [docs/18-login-sso.md](docs/18-login-sso.md).
+
+## 18. Assinatura de imagem (supply chain)
+
+Cada imagem buildada pelo CI é **assinada** (cosign keyless: a identidade é
+o próprio workflow do GitHub, sem chave para guardar) e recebe o **SBOM**
+(lista de pacotes) como atestado. O Kyverno confere a assinatura antes de o
+pod subir: só imagem do `deploy.yml`/`release.yml` dos repos de projeto.
+Começa em Audit; vira bloqueio quando todas as imagens forem assinadas.
+
+```bash
+make verify-image IMAGE=ghcr.io/<org>/<repo>/<app>:<tag>
+```
+
+Detalhes: [docs/19-assinatura-de-imagem.md](docs/19-assinatura-de-imagem.md).

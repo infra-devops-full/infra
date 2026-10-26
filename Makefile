@@ -4,6 +4,7 @@
         release rollback \
         sso sso-github \
         logos \
+        verify-image \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -153,6 +154,9 @@ release: ## Publica uma versão em prod (Actions → release). Uso: make release
 rollback: ## Volta prod/develop para a versão anterior PELO GIT. Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]
 	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then echo "$(YELLOW)⚠️  Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]$(RESET)"; exit 1; fi
 	@./scripts/rollback.sh $(PROJECT) $(ENV) $(if $(APP),--app $(APP)) $(if $(TO),--to $(TO))
+
+verify-image: ## Confere a assinatura (CI da plataforma) e o SBOM de uma imagem. Uso: make verify-image IMAGE=ghcr.io/<org>/<repo>/<app>:<tag>
+	@./scripts/verify-image.sh $(IMAGE)
 
 logos: ## Baixa o logo de cada projeto (project.yaml → logo: URL) para projects/<p>/logo.png. Uso: make logos [PROJECT=<p>]
 	@./scripts/sync-logos.sh $(PROJECT)

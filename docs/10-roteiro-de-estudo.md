@@ -39,6 +39,7 @@ e um exercício.
 | 5 | **Argo Rollouts**: canary em prod (20% → 50% → 100%) com análise de 5xx no Prometheus e rollback automático | ✅ feito |
 | 5.1 | **Releases**: versão semântica, changelog, prod só por release (mesma imagem de develop), `make rollback` | ✅ feito |
 | 5.2 | **SSO e RBAC**: login GitHub (Dex) no ArgoCD, Grafana, Prometheus, Alertmanager e Rollouts; perfis admin / dev do projeto / leitura por time | ✅ pronto (falta o OAuth App) |
-| 5.3 | **Assinatura de imagem**: cosign + SBOM no CI, Kyverno só aceita imagem assinada | próximo |
+| 5.3 | **Assinatura de imagem**: cosign keyless + SBOM atestado no CI, Kyverno verificando (Audit → Deny) | ✅ feito |
+| 5.4 | **Notificações**: alertas no Slack/Discord com webhook selado, rota por ambiente | próximo |
 | 6 | **Tracing**: OpenTelemetry + Tempo (front → API → RabbitMQ → serviço) | |
 | 7 | **Nuvem**: Terraform, cluster de prod separado, banco gerenciado, DNS/TLS reais, backup (Velero); guia para AWS, DigitalOcean e VPS | |
