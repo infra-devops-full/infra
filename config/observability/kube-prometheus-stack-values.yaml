@@ -61,8 +61,18 @@ grafana:
       # Página inicial = "Platform / Início" (k8s/grafana-dashboard-home.yaml),
       # no caminho em que o sidecar grava (pasta = annotation grafana_folder).
       default_home_dashboard_path: /tmp/dashboards/Platform/platform-home.json
+  # Banco do Grafana (usuários do login único, preferências, favoritos,
+  # anotações) em disco: sobrevive a reinícios do pod. Dashboards continuam
+  # vindo do Git (k8s/grafana-dashboard-*.yaml) — edite lá, não pela UI.
   persistence:
-    enabled: false
+    enabled: true
+    type: pvc
+    storageClassName: local-path
+    size: 1Gi
+  # O volume (RWO) é de um pod por vez: o novo só sobe depois do antigo sair.
+  deploymentStrategy:
+    type: Recreate
+    rollingUpdate: null   # remove o campo da estratégia anterior (server-side apply)
   sidecar:
     dashboards:
       enabled: true

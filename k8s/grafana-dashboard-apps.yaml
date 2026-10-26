@@ -64,7 +64,7 @@ data:
               "query": "label_values(kube_namespace_created, namespace)",
               "refId": "project"
             },
-            "regex": "/^(?!kube-|monitoring$|argocd$|default$|tooling$|local-path-storage$)(.+)-[^-]+$/",
+            "regex": "/^(?!kube-|monitoring$|argocd$|argo-rollouts$|cert-manager$|default$|tooling$|local-path-storage$)(.+)-[^-]+$/",
             "refresh": 2,
             "sort": 1,
             "multi": false,
@@ -97,7 +97,7 @@ data:
               "uid": "prometheus"
             },
             "query": {
-              "query": "label_values(kube_deployment_created{namespace=\"$project-$env\"}, deployment)",
+              "query": "label_values(kube_replicaset_owner{namespace=\"$project-$env\", owner_kind=~\"Deployment|Rollout\"}, owner_name)",
               "refId": "app"
             },
             "refresh": 2,
@@ -107,7 +107,8 @@ data:
             "current": {
               "text": "All",
               "value": "$__all"
-            }
+            },
+            "definition": "label_values(kube_replicaset_owner{namespace=\"$project-$env\", owner_kind=~\"Deployment|Rollout\"}, owner_name)"
           }
         ]
       },

@@ -51,6 +51,33 @@ Ambiente → App**.
 | Seção | Painéis | Fonte |
 | ----- | ------- | ----- |
 | Cabeçalho | logo, pods rodando, requests/s, % 5xx, erros no log | `projects/<p>/logo.png` + as fontes abaixo |
+
+O filtro **App** lista os donos dos ReplicaSets do namespace
+(`kube_replicaset_owner`): Deployments (develop e dependências) **e**
+Rollouts (apps em prod, com canary).
+
+### Logo do projeto
+
+O logo vem de `projects/<p>/logo.png` **no GitHub**. Para trocar:
+
+```bash
+# no project.yaml:  logo: https://avatars.githubusercontent.com/u/<id>?v=4
+#   (avatar da org: gh api orgs/<org> -q .avatar_url)
+make logos PROJECT=<p>        # baixa, converte para PNG 256x256 em logo.png
+git add projects/<p> && git commit -m "chore(<p>): logo" && git push
+```
+
+Não troque o logo editando o painel pela interface do Grafana: a mudança
+fica só no banco dele, vale para todos os projetos de uma vez (o painel é o
+mesmo) e é sobrescrita quando o dashboard do Git muda.
+
+### O que fica salvo no Grafana
+
+O Grafana tem disco próprio (PVC de 1 Gi, `local-path`, dentro do
+`DATA_DIR`): usuários do login único, preferências, favoritos e anotações
+sobrevivem a reinícios. **Dashboards** são do Git
+(`k8s/grafana-dashboard-*.yaml`): edite lá, ou edite pela UI para testar e
+depois copie o JSON (*Share → Export*) para o arquivo.
 | Requests | requests/s por app, status HTTP, latência p95, erros 4xx/5xx | métricas do Ingress |
 | Logs de erro | erros por app e as linhas com `error`/`exception`/`fatal`/`panic` | Loki |
 | Recursos | CPU, memória, rede, restarts | cAdvisor, kube-state-metrics |

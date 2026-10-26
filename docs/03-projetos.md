@@ -5,7 +5,7 @@
 ```
 projects/<projeto>/                 # nome da pasta = nome do projeto
 ├── project.yaml                    # dependências que a plataforma provisiona
-├── logo.png                        # logo no Grafana (PNG ~256px)
+├── logo.png                        # logo no Grafana (PNG 256px; gerado por `make logos` se houver `logo:` no project.yaml)
 ├── secrets/
 │   ├── example.env                 # modelo dos segredos (versionado, valores fictícios)
 │   └── <env>.env                   # valores reais (gitignored)

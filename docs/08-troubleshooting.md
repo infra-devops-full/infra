@@ -78,6 +78,15 @@ treinar o diagnóstico, veja [11-treino-quebre-e-conserte.md](11-treino-quebre-e
 | deploy em prod demora ~5 min | são os passos do canary (20% → 2 min → 50% → 2 min) | esperado; `make promote` pula uma pausa |
 | `rollouts.devops.local` não abre | host novo fora do `/etc/hosts` | `make hosts` |
 
+## Grafana
+
+| Sintoma | Causa | Solução |
+| ------- | ----- | ------- |
+| apps de prod não aparecem no filtro App | filtro antigo listava só Deployments; em prod os apps são Rollouts | já corrigido (`kube_replicaset_owner`); `make apply-argocd` |
+| logo trocado pela UI some depois de um tempo | edição de dashboard provisionado fica só no banco do Grafana | `logo:` no project.yaml + `make logos` + commit |
+| logo novo não aparece | o PNG ainda não foi para o GitHub, ou cache do GitHub (~5 min) | push; esperar |
+| preferências/usuários somem ao reiniciar | Grafana sem disco (antes desta versão) | persistência ligada nos values do kube-prometheus-stack |
+
 ## Alertas
 
 | Sintoma | Causa | Solução |

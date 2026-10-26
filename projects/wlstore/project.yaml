@@ -18,6 +18,9 @@
 
 # Texto do projeto na UI do ArgoCD (AppProject).
 description: "WLStore — e-commerce whitelabel: front Next.js (loja, painel, checkout) + catalog e pricing (Spring)"
+# Logo no Grafana: avatar da org no GitHub. Para trocar: mude a URL e rode
+# `make logos PROJECT=wlstore` (baixa para logo.png) e commite o PNG.
+logo: https://avatars.githubusercontent.com/u/347498737?v=4
 
 # Repos de código (um por app/time; quem builda é o CI de cada um). Usados
 # pelo `make github` (develop, deploy key, proteção da main) e pelo doctor.
