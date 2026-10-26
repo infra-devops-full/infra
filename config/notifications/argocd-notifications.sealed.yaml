@@ -1,0 +1,13 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: argocd-notifications-secret
+  namespace: argocd
+spec:
+  encryptedData:
+    discord-deploys-url: AgBartJOYpTdJdKS2fc3daaVjWPpLuTXRgOMCYT4wHmvaIEuU7JwI6PndK3P412tcLAcj9PGA+CbIGv5lIioFfpUdz9pfDKbd0he8iURGoZ3wYw0PkKH5dgOQLECXXYlKESKeNkv45ANGctcey0awZ+zJrLvw7AIfVVafH2Arn8QLTgiJ/Hwt7kiDLrdEacz/YN0TJyrRDct07C9cwifjD52qvvugcvqWQh6/66O5by6V3C9F36gH2fFkpZvuULd7qVpaPkwlS9Cwp/gerejfSnHDdk7UKsZbOniDqd/kzAadjG4BejMIqdW2FqDfwrHGDGlnQhty3EXcTlUBitPcr/+qdXuH8OQ8fsi/GA9bEm5rWWtEYUEePY8sB8OXTukK4S/H6l0PWmeJFt1ndqc1O+191ET8eANJ60rRvseG1IS20B4divlwezDhxVpmKLLuN+hipPyjkqHaxnX7law0SA84a79WP8H+Eowzuw4pNCoB1SOpwgjQeA7KHPzPSAXO0bj4GJQ3ivQvOu6hpUcQTygJXzCSmwNvWiCOn3Hxxmc/lpdrzqX5jC0/kiWKd1Wr7vbkfJqWcybNe65Q+Sbp7avGdIqXR4sQLZXaiahARdCv8zXEntzbjUVGUuEYNhfKHeEOGxqcgrie2ZeNgBY963qkG+qXvOOEC9JJnXwbERptQiH6YHO8+WEjKBsL+3IDvxei+x6IL20uHF+vYCJLXwpQskPWkg6HibKLHweaZ+95I2u/wubpvHp2oQ/IMBCzkF8FeTN8+8HDLAPed9ahZRfYmQ7vUD9+xyUAQmLbOPawN43niqJjAaqN7HdfvOUjuV/t2alrxn5k4nos2OoffQhiVlbG65++PRC
+  template:
+    metadata:
+      name: argocd-notifications-secret
+      namespace: argocd

@@ -1,0 +1,121 @@
+# =============================================================================
+# Notificações de DEPLOY no Discord (#deploys), pelo ArgoCD Notifications.
+# Aplicado por setup-notifications.sh (make notifications) quando o Secret
+# argocd-notifications-secret existe. docs/20-notificacoes.md
+#
+#   🚀 deploy em prod / 🧪 deploy em develop   (uma vez por revisão do Git)
+#   ❌ sync falhou                              (manifesto inválido, política recusou...)
+#   ⚠️ app degradado                            (inclui canary abortado)
+#
+# Só Applications de app (label devops-platform/kind=app): as de segredos e
+# de projeto não notificam. A URL do webhook fica no Secret selado
+# (config/notifications/argocd-notifications.sealed.yaml).
+# =============================================================================
+notifications:
+  enabled: true
+  argocdUrl: https://argocd.devops.local
+  secret:
+    create: false        # vem do SealedSecret argocd-notifications-secret
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits:   { memory: 128Mi }
+
+  notifiers:
+    service.webhook.discord-deploys: |
+      url: $discord-deploys-url
+      headers:
+        - name: Content-Type
+          value: application/json
+
+  subscriptions:
+    - recipients: [discord-deploys]
+      selector: devops-platform/kind=app
+      triggers: [on-deployed, on-sync-failed, on-health-degraded]
+
+  triggers:
+    trigger.on-deployed: |
+      - description: Sync concluído e app saudável (uma vez por revisão do Git)
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [app-deployed]
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+    trigger.on-sync-failed: |
+      - description: Sync falhou
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [app-sync-failed]
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']
+    trigger.on-health-degraded: |
+      - description: App degradado
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [app-health-degraded]
+        when: app.status.health.status == 'Degraded'
+
+  templates:
+    # Campos comuns: projeto/ambiente/app (labels do ApplicationSet), versão
+    # (imagem no ar), commit do repo de infra e link para o ArgoCD.
+    template.app-deployed: |
+      webhook:
+        discord-deploys:
+          method: POST
+          body: |
+            {{- $l := .app.metadata.labels -}}
+            {{- $env := index $l "devops-platform/env" -}}
+            {{- $rev := .app.status.sync.revision -}}
+            {{- $img := "" -}}{{- range .app.status.summary.images -}}{{- $img = . -}}{{- end -}}
+            {{- $ver := splitList ":" $img | last | default "?" -}}
+            {
+              "username": "ArgoCD",
+              "embeds": [{
+                "title": {{ printf "%s %s → %s" (ternary "🚀" "🧪" (eq $env "prod")) (index $l "devops-platform/app") $env | toJson }},
+                "url": {{ printf "%s/applications/argocd/%s" .context.argocdUrl .app.metadata.name | toJson }},
+                "color": {{ ternary 3066993 3447003 (eq $env "prod") }},
+                "description": {{ printf "Versão `%s` no ar em `%s`.%s" $ver .app.spec.destination.namespace (ternary " Canary concluído (20% → 50% → 100%)." "" (eq $env "prod")) | toJson }},
+                "fields": [
+                  {"name": "Projeto", "value": {{ index $l "devops-platform/project" | toJson }}, "inline": true},
+                  {"name": "Versão", "value": {{ $ver | toJson }}, "inline": true},
+                  {"name": "Revisão da infra", "value": {{ printf "[%s](%s/commit/%s)" (trunc 7 $rev) (trimSuffix ".git" .app.spec.source.repoURL) $rev | toJson }}, "inline": true}
+                ]
+              }]
+            }
+    template.app-sync-failed: |
+      webhook:
+        discord-deploys:
+          method: POST
+          body: |
+            {{- $l := .app.metadata.labels -}}
+            {
+              "username": "ArgoCD",
+              "embeds": [{
+                "title": {{ printf "❌ sync falhou: %s → %s" (index $l "devops-platform/app") (index $l "devops-platform/env") | toJson }},
+                "url": {{ printf "%s/applications/argocd/%s?operation=true" .context.argocdUrl .app.metadata.name | toJson }},
+                "color": 15158332,
+                "description": {{ .app.status.operationState.message | trunc 1500 | toJson }},
+                "fields": [
+                  {"name": "Projeto", "value": {{ index $l "devops-platform/project" | toJson }}, "inline": true},
+                  {"name": "O que fazer", "value": "Abra o link: *Sync Status* mostra o recurso e o erro. Recusa de política → `make policy-check`.", "inline": false}
+                ]
+              }]
+            }
+    template.app-health-degraded: |
+      webhook:
+        discord-deploys:
+          method: POST
+          body: |
+            {{- $l := .app.metadata.labels -}}
+            {{- $d := "" -}}
+            {{- range .app.status.resources -}}
+            {{- if and .health (eq .health.status "Degraded") -}}
+            {{- $d = printf "%s• %s/%s: %s\n" $d .kind .name (.health.message | default "") -}}
+            {{- end -}}
+            {{- end -}}
+            {
+              "username": "ArgoCD",
+              "embeds": [{
+                "title": {{ printf "⚠️ degradado: %s → %s" (index $l "devops-platform/app") (index $l "devops-platform/env") | toJson }},
+                "url": {{ printf "%s/applications/argocd/%s" .context.argocdUrl .app.metadata.name | toJson }},
+                "color": 15105570,
+                "description": {{ printf "%s\nNum canary, *RolloutAborted* quer dizer que a versão estável continua no ar: corrija e publique outra versão, ou `make rollback`." ($d | trunc 1500) | toJson }},
+                "fields": [
+                  {"name": "Projeto", "value": {{ index $l "devops-platform/project" | toJson }}, "inline": true}
+                ]
+              }]
+            }

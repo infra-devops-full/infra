@@ -112,6 +112,9 @@ O Prometheus recarrega as regras sozinho em ~1 a 2 min.
 
 ## Notificações (Discord, Slack, Telegram…)
 
+> Implementado: [20-notificacoes.md](20-notificacoes.md). O texto abaixo é
+> o raciocínio original.
+
 Hoje o receiver padrão é `null`: os alertas só aparecem nas UIs. Para
 notificar, o webhook (que é um segredo) segue o mesmo caminho do
 [Sealed Secrets](12-segredos.md):

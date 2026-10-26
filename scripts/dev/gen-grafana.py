@@ -21,7 +21,7 @@ PROM = {"type": "prometheus", "uid": "prometheus"}
 LOKI = {"type": "loki", "uid": "loki"}
 LOGO = "${INFRA_RAW_URL}/config/branding/platform-logo.png"
 # Namespaces da plataforma: o resto é namespace de projeto (<projeto>-<env>).
-INFRA_NS = "argocd|argo-rollouts|cert-manager|kyverno|monitoring|kube-system|kube-public|kube-node-lease|default|treino"
+INFRA_NS = "argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default|treino"
 
 COMMUNITY = [
     # id, revisão, uid fixo, arquivo, título, descrição, placeholders de datasource a trocar

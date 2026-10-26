@@ -1,0 +1,76 @@
+# =============================================================================
+# Notificações de ALERTAS no Discord (sobreposto aos values do
+# kube-prometheus-stack quando o Secret alertmanager-webhooks existe —
+# setup-observability.sh / make notifications). docs/20-notificacoes.md
+#
+#   #alertas          prod e plataforma (critical/warning), repete a cada 4h
+#   #alertas-develop  develop e o lab treino, repete a cada 24h
+#   (info, Watchdog)  não notifica
+#
+# As URLs dos webhooks ficam no Secret selado alertmanager-webhooks
+# (config/notifications/alertmanager-webhooks.sealed.yaml, make
+# notifications-webhooks), montado em /etc/alertmanager/secrets/: a URL nunca
+# aparece na config do Alertmanager.
+# =============================================================================
+alertmanager:
+  alertmanagerSpec:
+    secrets: [alertmanager-webhooks]
+  config:
+    templates: ['/etc/alertmanager/config/*.tmpl']
+    route:
+      receiver: "null"
+      group_by: [alertname, project, env, app]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        - receiver: "null"
+          matchers: ['alertname =~ "Watchdog|InfoInhibitor"']
+        - receiver: discord-alertas-develop
+          matchers: ['severity =~ "critical|warning"', 'env = "develop"']
+          repeat_interval: 24h
+        - receiver: discord-alertas-develop
+          matchers: ['severity =~ "critical|warning"', 'project = "treino"']
+          repeat_interval: 24h
+        - receiver: discord-alertas
+          matchers: ['severity =~ "critical|warning"']
+          repeat_interval: 4h
+    receivers:
+      - name: "null"
+      - name: discord-alertas
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/alertas
+            send_resolved: true
+            username: Alertmanager
+            title: '{{ template "discord.title" . }}'
+            message: '{{ template "discord.message" . }}'
+      - name: discord-alertas-develop
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/alertas-develop
+            send_resolved: true
+            username: Alertmanager (develop)
+            title: '{{ template "discord.title" . }}'
+            message: '{{ template "discord.message" . }}'
+  templateFiles:
+    discord.tmpl: |-
+      {{/* Título: 🔥 ou ✅, alerta e projeto/env · app (limite do Discord: 256) */}}
+      {{ define "discord.title" -}}
+      {{ if eq .Status "firing" }}🔥{{ else }}✅ Resolvido ·{{ end }} {{ .CommonLabels.alertname }}
+      {{- with .CommonLabels.project }} · {{ . }}{{ end }}{{ with .CommonLabels.env }}/{{ . }}{{ end }}
+      {{- with .CommonLabels.app }} · {{ . }}{{ end }}
+      {{- if gt (len .Alerts) 1 }} ({{ len .Alerts }}){{ end }}
+      {{- end }}
+
+      {{/* Corpo: um bloco por alerta, com links úteis (limite: 4096) */}}
+      {{ define "discord.message" -}}
+      {{ range .Alerts -}}
+      {{ if eq .Labels.severity "critical" }}🔴 **critical**{{ else if eq .Labels.severity "warning" }}🟠 **warning**{{ else }}⚪ {{ .Labels.severity }}{{ end }} — {{ .Annotations.summary }}
+      {{ with .Annotations.description }}{{ . }}
+      {{ end -}}
+      {{ if .Labels.project }}📊 [Dashboard](https://grafana.devops.local/d/platform-apps?var-project={{ .Labels.project }}{{ with .Labels.env }}&var-env={{ . }}{{ end }}) · {{ end -}}
+      {{ with .Annotations.runbook_url }}📖 [Runbook]({{ . }}) · {{ end -}}
+      🔕 [Silenciar](https://alertmanager.devops.local/#/silences/new?filter=%7Balertname%3D%22{{ .Labels.alertname }}%22%7D)
+      {{ if eq .Status "firing" }}⏱️ desde {{ (.StartsAt | tz "America/Sao_Paulo").Format "02/01 15:04" }}{{ else }}⏱️ resolvido às {{ (.EndsAt | tz "America/Sao_Paulo").Format "15:04" }}{{ end }}
+
+      {{ end -}}
+      {{- end }}

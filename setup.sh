@@ -239,6 +239,10 @@ bash "$SCRIPT_DIR/scripts/apply-platform.sh"
 # (config/auth/github-oauth.sealed.yaml), só explica como configurar.
 bash "$SCRIPT_DIR/scripts/setup-sso.sh"
 
+# Notificações no Discord (alertas e deploys). Sem os webhooks selados
+# (config/notifications/*.sealed.yaml), só explica como configurar.
+bash "$SCRIPT_DIR/scripts/setup-notifications.sh"
+
 # ==============================================================================
 # ETAPA 6: /etc/hosts (bloco isolado entre marcadores devops-platform)
 # ==============================================================================

@@ -38,6 +38,10 @@ if sso_enabled; then
   sso_render "$SSO_TMP" >/dev/null
   SSO_VALUES=(-f "$SSO_TMP/kube-prometheus-stack.json")
 fi
+# Webhooks do Discord configurados (make notifications)? Alertmanager notifica.
+if kubectl get secret alertmanager-webhooks -n monitoring >/dev/null 2>&1; then
+  SSO_VALUES+=(-f "$INFRA_ROOT/config/notifications/alertmanager-values.yaml")
+fi
 
 KPS_CHART_VERSION="92.11.0"
 LOKI_CHART_VERSION="7.3.0"

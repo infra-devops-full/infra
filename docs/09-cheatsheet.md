@@ -38,6 +38,7 @@ make promote|abort|retry SERVICE=<app> NAMESPACE=<ns> [FULL=1]
 make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto|patch|minor|major]
 make sso-github && make sso        # login único (GitHub via Dex)
 make verify-image IMAGE=<imagem:tag>   # assinatura do CI + SBOM
+make notifications-webhooks && make notifications && make notify-test   # Discord
 make logos [PROJECT=<p>]           # logo do project.yaml → logo.png
 make rollback PROJECT=<p> ENV=prod [APP=<app>] [TO=1.3.0]
 make pods [NAMESPACE=<ns>]         # pods dos projetos

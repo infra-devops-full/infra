@@ -847,3 +847,17 @@ make verify-image IMAGE=ghcr.io/<org>/<repo>/<app>:<tag>
 ```
 
 Detalhes: [docs/19-assinatura-de-imagem.md](docs/19-assinatura-de-imagem.md).
+
+## 19. Notificações (Discord)
+
+Três canais: `#alertas` (prod e plataforma), `#alertas-develop` e
+`#deploys` (deploys, sync com falha, app degradado e canary abortado). As
+mensagens trazem severidade, links para dashboard, runbook e silenciar, e
+avisam quando resolve. As URLs dos webhooks ficam seladas no Git.
+
+```bash
+make notifications-webhooks   # cola as URLs (uma vez)
+make notifications && make notify-test
+```
+
+Detalhes: [docs/20-notificacoes.md](docs/20-notificacoes.md).

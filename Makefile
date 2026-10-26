@@ -5,6 +5,7 @@
         sso sso-github \
         logos \
         verify-image \
+        notifications notifications-webhooks notify-test \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -154,6 +155,15 @@ release: ## Publica uma versão em prod (Actions → release). Uso: make release
 rollback: ## Volta prod/develop para a versão anterior PELO GIT. Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]
 	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then echo "$(YELLOW)⚠️  Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]$(RESET)"; exit 1; fi
 	@./scripts/rollback.sh $(PROJECT) $(ENV) $(if $(APP),--app $(APP)) $(if $(TO),--to $(TO))
+
+notifications: ## Notificações no Discord (alertas e deploys) — precisa dos webhooks selados
+	@./scripts/setup-notifications.sh
+
+notifications-webhooks: ## Sela as URLs dos webhooks do Discord (#alertas, #alertas-develop, #deploys)
+	@./scripts/seal-notifications.sh
+
+notify-test: ## Manda notificações de teste para os canais do Discord
+	@./scripts/notify-test.sh
 
 verify-image: ## Confere a assinatura (CI da plataforma) e o SBOM de uma imagem. Uso: make verify-image IMAGE=ghcr.io/<org>/<repo>/<app>:<tag>
 	@./scripts/verify-image.sh $(IMAGE)
