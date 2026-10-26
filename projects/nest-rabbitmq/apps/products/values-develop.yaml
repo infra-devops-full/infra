@@ -1,5 +1,5 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 image:
-  tag: sha-96bded4
+  tag: sha-0cf52e7
 env:
   NODE_ENV: development
