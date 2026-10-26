@@ -17,6 +17,7 @@ material de estudo e treino.
 | [07-scripts.md](07-scripts.md) | o que cada script e cada comando do Makefile faz, e como se encadeiam |
 | [08-troubleshooting.md](08-troubleshooting.md) | problemas reais que já aconteceram, com causa e solução |
 | [09-cheatsheet.md](09-cheatsheet.md) | comandos `make`, `kubectl` e `git` do dia a dia |
+| [17-variaveis-de-ambiente.md](17-variaveis-de-ambiente.md) | `.env` nos repos, config × segredo, `values` × `make seal`, cuidado com `NEXT_PUBLIC_*`, validação na subida |
 | [16-releases.md](16-releases.md) | versões (`make release`), changelog, hotfix e rollback (`make rollback`, abort e por que não o botão do ArgoCD) |
 | [15-entrega-progressiva.md](15-entrega-progressiva.md) | Argo Rollouts: canary pelo NGINX, análise de 5xx no Prometheus, rollback automático, promote/abort |
 | [14-seguranca.md](14-seguranca.md) | HTTPS com cert-manager e CA local, NetworkPolicies por namespace, Kyverno e Pod Security, `make policy-check` |

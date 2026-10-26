@@ -141,6 +141,10 @@ make doctor       # "a chave do cluster é a mesma do cert.pem commitado"
 | `make seal`: `cert.pem não existe` | controller nunca instalado | `make sealed-secrets` com o cluster no ar |
 | `git status` mostra `sealed/` alterado sem você mudar nada | selar de novo gera criptografia diferente (chave de sessão aleatória) | commite só quando quiser mudar; `git checkout projects/<p>/sealed` desfaz |
 
+> Onde colocar cada variável (config × segredo, local × cluster) e a
+> convenção de `.env` nos repos dos apps:
+> [17-variaveis-de-ambiente.md](17-variaveis-de-ambiente.md).
+
 ## Referência
 
 - `scripts/setup-sealed-secrets.sh`: controller e chave (`make sealed-secrets`).

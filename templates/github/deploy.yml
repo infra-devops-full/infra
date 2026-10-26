@@ -26,7 +26,7 @@
 #
 # Só os apps AFETADOS pelo push são testados/buildados/deployados (campo
 # `paths`). Buildam TODOS: workflow_dispatch, primeiro push de uma branch e
-# mudanças em .github/workflows/.
+# mudanças no próprio deploy.yml.
 #
 # O job `ci` resume o resultado num check só — é ele que a proteção da `main`
 # exige (configurado por `make github` no repo de infra).
@@ -125,7 +125,8 @@ jobs:
                   ).split()
               except subprocess.CalledProcessError:
                   changed = None
-          if changed is not None and any(f.startswith(".github/workflows/") for f in changed):
+          # Mudou o próprio pipeline (deploy.yml) → builda todos.
+          if changed is not None and ".github/workflows/deploy.yml" in changed:
               changed = None
           def affected(a):
               return changed is None or any(f.startswith(p) for f in changed for p in a["paths"])

@@ -96,12 +96,91 @@ O tráfego já voltou sozinho para a versão estável: **os usuários não estã
 mais afetados**. Mas o Git ainda pede a versão nova (o ArgoCD mostra
 *Degraded*). Duas saídas:
 
-1. **Corrigir e publicar outra versão** (o normal): o próximo merge na main
-   gera uma tag nova, e o canary recomeça.
-2. **Reverter no Git** o commit `deploy(<p>/prod): ...` do repo de infra.
+1. **Corrigir e publicar outra versão** (o normal): correção na develop →
+   PR para main → `make release`, e o canary recomeça.
+2. **Voltar no Git** para a versão anterior: `make rollback PROJECT=<p> ENV=prod`.
 
 `make retry` só faz sentido se a falha foi externa (dependência fora do ar
 durante a análise), porque a versão é a mesma.
+
+## Rollback na prática: a `<div>Test</div>` que foi para prod
+
+Uma mudança "inocente" no front:
+
+```tsx
+// wlstore-fe — src/app/(loja)/page.tsx
+      <ProductShelf eyebrow="Acabou de chegar" title="Novidades" ... />
+      <div>Test</div>   {/* ← esquecida, foi para a release 1.4.0 */}
+    </main>
+```
+
+Ela não gera erro 5xx, então **a análise do canary não pega**: a página
+responde 200, só que com um "Test" na vitrine. Quem percebe é uma pessoa.
+O que fazer depende de **quando** ela percebe:
+
+```
+release 1.4.0 ─► canary 20% ──2 min──► 50% ──2 min──► 100% (estável)
+                 └──────── janela do ABORT ───────┘    └─ janela do ROLLBACK ─►
+```
+
+### 1. Durante o canary → abort (segundos)
+
+Só parte dos usuários está vendo a div. Aborte, e 100% volta para a 1.3.0
+na hora:
+
+- **Pelo painel do ArgoCD:** Applications → `wlstore-fe-prod` → na árvore,
+  clique no recurso **Rollout** `wlstore-fe` → menu **⋮** → **Actions** →
+  **abort**.
+- **Pelo terminal:** `make abort SERVICE=wlstore-fe NAMESPACE=wlstore-prod`.
+
+O Rollout fica `Degraded` (o Git ainda pede a 1.4.0), mas ninguém mais vê
+a div.
+
+### 2. Depois de 100% → rollback pelo Git (segundos)
+
+A 1.4.0 já é a estável. Volte para a anterior:
+
+```bash
+make rollback PROJECT=wlstore ENV=prod APP=wlstore-fe
+#   wlstore-fe   1.4.0  →  1.3.0
+#   Commitar e dar push deste rollback em wlstore/prod? [s/N] s
+#   ✅ rollback commitado: wlstore-fe@1.3.0
+```
+
+O script troca o `image.tag` no `values-prod.yaml`, commita, dá push e avisa
+o ArgoCD. Como a 1.3.0 rodou 100% há pouco, ela está na **janela de
+rollback** (`rollout.rollbackWindow: 3`): o Argo Rollouts troca **sem
+canary**, de uma vez, sem esperar os 4 minutos de passos.
+
+### 3. Depois: a correção definitiva
+
+No repo do app, desfaça o commit e publique uma versão nova:
+
+```bash
+git revert <commit-da-div>          # na develop
+git push                            # build + deploy em develop: confira lá
+# PR develop → main, merge
+make release PROJECT=wlstore REPO=whitelabel-store/wlstore-fe   # → 1.4.1
+```
+
+### E o botão "Rollback" do ArgoCD?
+
+Em *History and Rollback* existe um botão para voltar a um sync anterior,
+mas ele fica **bloqueado** nas nossas Applications porque elas usam
+**auto-sync com selfHeal**. Mesmo se você desligar o auto-sync para usar o
+botão, o Git continua dizendo 1.4.0: o cluster passa a divergir do Git, o
+alerta `ArgoAppOutOfSync` dispara e o próximo sync traz a div de volta. No
+GitOps, **o rollback é um commit**: fica registrado quem voltou, quando e
+por quê.
+
+| Situação | Ação | Onde | Tempo |
+| -------- | ---- | ---- | ----- |
+| canary em andamento | **abort** | ArgoCD (Rollout → Actions) ou `make abort` | segundos |
+| versão já estável | **rollback** | `make rollback` (commit no Git) | segundos (janela de rollback) |
+| erro 5xx no canary | nada: a **análise aborta sozinha** | — | ~1 a 2 min |
+| correção definitiva | revert + nova release | repo do app | um ciclo develop → main → release |
+
+Mais sobre versões e rollback: [16-releases.md](16-releases.md).
 
 ## Runbooks
 

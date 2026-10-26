@@ -87,9 +87,14 @@ jobs:
               return subprocess.run(["git", *a], capture_output=True, text=True).stdout.strip()
           last = git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.[0-9]*")
           rng = f"{last}..HEAD" if last else "HEAD"
-          log = git("log", rng, "--no-merges", "--format=%h%x1f%s%x1f%b%x1e")
-          commits = [c.split("\x1f") for c in log.split("\x1e") if c.strip()]
-          commits = [(h.strip(), s.strip(), b) for h, s, b in commits]
+          # Marcadores de texto: \x1e/\x1f contam como espaço para o str.strip().
+          raw = subprocess.run(["git", "log", rng, "--no-merges", "--format=%h@@F@@%s@@F@@%b@@R@@"],
+                               capture_output=True, text=True).stdout
+          commits = []
+          for rec in raw.split("@@R@@"):
+              parts = rec.split("@@F@@")
+              if len(parts) == 3 and parts[0].strip():
+                  commits.append((parts[0].strip(), parts[1].strip(), parts[2]))
           if last and not commits:
               raise SystemExit(f"::error::nada novo desde {last}: faça merge de develop → main antes")
 
