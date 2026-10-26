@@ -10,7 +10,9 @@
 #      A chave da CA tem backup em $PLATFORM_CA_DIR (fora do Git); ao recriar
 #      o cluster ela é restaurada, e o navegador que confiou nela (make
 #      trust-ca) continua confiando.
-#   2. Kyverno (config/security/kyverno-values.yaml): políticas de admissão e
+#   2. trust-manager (CA local em todo namespace) e DNS interno para
+#      *.devops.local — base do login único (setup-sso.sh).
+#   3. Kyverno (config/security/kyverno-values.yaml): políticas de admissão e
 #      geração das NetworkPolicies de cada namespace de projeto.
 #
 # As políticas e regras ficam em k8s/kyverno-*.yaml (apply-platform.sh).
@@ -28,6 +30,7 @@ CFG="$INFRA_ROOT/config/security"
 
 CERT_MANAGER_CHART_VERSION="v1.21.2"
 KYVERNO_CHART_VERSION="3.9.2"   # Kyverno 1.19.2
+TRUST_MANAGER_CHART_VERSION="v0.25.0"
 CA_DIR="${PLATFORM_CA_DIR:-$HOME/.config/devops-platform/ca}"
 CA_DIR="$(eval echo "$CA_DIR")"
 CA_BACKUP="$CA_DIR/platform-ca-secret.yaml"
@@ -79,6 +82,23 @@ fi
 echo "$NEW_CERT" > "$CA_CERT"
 step "CA: backup em $CA_BACKUP, certificado público em $CA_CERT"
 
+# trust-manager: o certificado da CA vira o ConfigMap platform-ca em todo
+# namespace, para pods confiarem em https://*.devops.local (login/SSO).
+step "trust-manager $TRUST_MANAGER_CHART_VERSION (CA em todos os namespaces)"
+helm upgrade --install trust-manager jetstack/trust-manager --version "$TRUST_MANAGER_CHART_VERSION" \
+  --namespace cert-manager \
+  --set app.trust.namespace=cert-manager \
+  --set resources.requests.cpu=10m --set resources.requests.memory=32Mi \
+  --timeout 5m --wait >/dev/null
+kubectl apply -f "$CFG/trust-bundle.yaml" >/dev/null
+
+# DNS interno: *.devops.local → NGINX Ingress (pods falam com o Dex pelo
+# mesmo endereço e certificado do navegador).
+step "CoreDNS: *.devops.local dentro do cluster"
+kubectl apply -f "$CFG/coredns-custom.yaml" >/dev/null
+kubectl -n kube-system rollout restart deploy/coredns >/dev/null
+kubectl -n kube-system rollout status deploy/coredns --timeout=120s >/dev/null
+
 # 2. Kyverno
 step "Kyverno $KYVERNO_CHART_VERSION"
 helm upgrade --install kyverno kyverno/kyverno --version "$KYVERNO_CHART_VERSION" \
@@ -86,4 +106,4 @@ helm upgrade --install kyverno kyverno/kyverno --version "$KYVERNO_CHART_VERSION
   -f "$CFG/kyverno-values.yaml" \
   --timeout 10m --wait >/dev/null
 
-echo -e "\033[0;32m✅ Segurança: cert-manager + CA local e Kyverno prontos\033[0m"
+echo -e "\033[0;32m✅ Segurança: cert-manager + CA local, trust-manager, DNS interno e Kyverno prontos\033[0m"

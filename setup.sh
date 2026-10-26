@@ -235,6 +235,10 @@ done
 
 bash "$SCRIPT_DIR/scripts/apply-platform.sh"
 
+# Login único (GitHub via Dex). Sem o OAuth App selado
+# (config/auth/github-oauth.sealed.yaml), só explica como configurar.
+bash "$SCRIPT_DIR/scripts/setup-sso.sh"
+
 # ==============================================================================
 # ETAPA 6: /etc/hosts (bloco isolado entre marcadores devops-platform)
 # ==============================================================================

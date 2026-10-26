@@ -10,6 +10,17 @@ metadata:
   name: {{ $fullname }}
   labels:
     {{- include "app.labels" . | nindent 4 }}
+  {{- with .Values.release }}
+  {{- if .version }}
+  annotations:
+    # Versão no ar e link para o changelog (GitHub Release): o ArgoCD mostra
+    # o link no recurso. Preenchidos pelo release.yml do repo do app.
+    devops-platform/release: {{ .version | quote }}
+    {{- if .url }}
+    link.argocd.argoproj.io/external-link: {{ .url | quote }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
   {{- if $rollout }}

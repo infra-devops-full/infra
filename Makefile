@@ -2,6 +2,7 @@
         security trust-ca untrust-ca policies policy-check \
         delivery rollouts promote abort retry lab-canary \
         release rollback \
+        sso sso-github \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -151,6 +152,12 @@ release: ## Publica uma versão em prod (Actions → release). Uso: make release
 rollback: ## Volta prod/develop para a versão anterior PELO GIT. Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]
 	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then echo "$(YELLOW)⚠️  Uso: make rollback PROJECT=<p> ENV=<e> [APP=<app>] [TO=<tag>]$(RESET)"; exit 1; fi
 	@./scripts/rollback.sh $(PROJECT) $(ENV) $(if $(APP),--app $(APP)) $(if $(TO),--to $(TO))
+
+sso: ## Login único (GitHub via Dex) no ArgoCD, Grafana, Prometheus, Alertmanager e Rollouts
+	@./scripts/setup-sso.sh
+
+sso-github: ## Sela o Client ID/secret do OAuth App do GitHub (config/auth/github-oauth.sealed.yaml)
+	@./scripts/seal-sso.sh
 
 delivery: ## Instala/atualiza o Argo Rollouts (canary) e a análise padrão (cluster existente)
 	@./scripts/setup-delivery.sh

@@ -118,6 +118,43 @@ make rollback PROJECT=wlstore ENV=prod APP=wlstore-fe
 Depois, no repo do app: `git revert <commit da div>` na develop → PR para
 main → `make release` (sai uma versão nova, sem a div).
 
+## Perguntas frequentes
+
+**A release é sempre para prod?** Sim. Cada ambiente tem o seu gatilho:
+
+| Ambiente | Recebe | Gatilho | Tag da imagem |
+| -------- | ------ | ------- | ------------- |
+| develop | cada push na `develop` | automático (build-and-deploy) | `sha-<commit>` |
+| prod | só versões | **release** (botão ou `make release`) | `1.4.0` (a mesma imagem de um `sha-` já testado) |
+
+A `main` não é um ambiente: é o código aprovado, pronto para virar versão.
+
+**Por que o ArgoCD mostra "Suspended" durante o deploy?** Durante as pausas
+do canary (`pause: 2m`), o Rollout fica pausado, e o ArgoCD mostra a saúde
+dele (e da Application) como *Suspended*. É esperado: a versão nova está
+recebendo 20% ou 50% dos requests enquanto a análise mede. No fim dos
+passos, volta para *Healthy*. Se a análise reprovar, vira *Degraded*.
+
+**Onde vejo o que entrou numa versão?** Na GitHub Release
+(`github.com/<org>/<repo>/releases/tag/v1.4.0`), com o changelog e o
+link de comparação. No ArgoCD, o recurso Rollout tem um ícone de link
+externo que abre essa página (annotation gravada pela release). No dashboard
+do Argo Rollouts aparece só a imagem (`:1.4.0`) de cada *Revision*.
+
+**E os botões do dashboard do Argo Rollouts?**
+
+| Botão | O que faz | Convive com o GitOps? |
+| ----- | --------- | --------------------- |
+| Abort | tira o peso do canary (status do Rollout) | **sim**: o ArgoCD não reverte status |
+| Promote / PromoteFull | avança o canary | sim |
+| Retry | tenta de novo um canary abortado | sim |
+| **Rollback** (numa Revision) | troca o pod template para a revisão antiga | **não**: o selfHeal do ArgoCD reaplica a versão do Git e começa outro canary. Use `make rollback` |
+| Restart | recria os pods (mesma versão) | sim |
+
+Hoje o dashboard é **somente leitura** (não tem login): os botões aparecem,
+mas a ação é recusada. Com o login único (próxima fase), ele passa a exigir
+login e as ações ficam liberadas para quem tem permissão.
+
 ## Arquivos
 
 | Arquivo | O quê |

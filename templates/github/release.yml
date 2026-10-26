@@ -208,7 +208,7 @@ jobs:
           for APP in $(jq -r '.[].app' /tmp/apps.json); do
             FILE="projects/${INFRA_PROJECT}/apps/${APP}/values-prod.yaml"
             [ -f "$FILE" ] || { echo "↷ $APP sem values-prod.yaml — pulado"; continue; }
-            yq -i ".image.tag = \"${VERSION}\"" "$FILE"
+            yq -i ".image.tag = \"${VERSION}\" | .release.version = \"${VERSION}\" | .release.url = \"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}\"" "$FILE"
             echo "→ $FILE: image.tag=${VERSION}"
           done
           git config user.name  "github-actions[bot]"

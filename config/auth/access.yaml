@@ -1,0 +1,23 @@
+# =============================================================================
+# Login único (SSO) da plataforma: quem entra e quem é admin.
+# Lido por scripts/lib-sso.sh (make sso). Detalhes: docs/18-login-sso.md
+#
+# Login: GitHub (via Dex). Só membros das orgs abaixo conseguem entrar.
+# Grupos = "<org>:<time>" (slug do time no GitHub).
+#
+# Perfis:
+#   admins   tudo: ArgoCD admin, Grafana Admin, Prometheus, Alertmanager,
+#            dashboard do Argo Rollouts (promote/abort/rollback)
+#   devs     por projeto, em projects/<p>/project.yaml → access.devs:
+#            sync, rollback, ações do Rollout (abort/promote) e logs SÓ nos
+#            apps do projeto; Grafana Editor; Prometheus e Alertmanager
+#   demais   membros das orgs sem time de admin/dev: só leitura
+# =============================================================================
+github:
+  orgs:
+    - infra-devops-full
+    - crivo-sync
+    - whitelabel-store
+
+admins:
+  - infra-devops-full:platform-admins

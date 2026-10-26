@@ -103,6 +103,11 @@ rollout:
   # Rollback para uma das últimas N versões é imediato (sem canary).
   rollbackWindow: 3
 
+# Versão publicada (preenchido pelo release.yml nos values-prod.yaml).
+release:
+  version: ""
+  url: ""
+
 autoscaling:
   enabled: false
   minReplicas: 1

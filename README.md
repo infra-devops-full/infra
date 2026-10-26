@@ -818,3 +818,18 @@ make abort    SERVICE=<app> NAMESPACE=<ns>        # durante o canary: volta na h
 
 O botão *Rollback* do ArgoCD fica bloqueado com auto-sync (o Git manda); por
 quê e quando usar cada opção: [docs/16-releases.md](docs/16-releases.md).
+
+## 17. Login único (GitHub)
+
+ArgoCD, Grafana, Prometheus, Alertmanager e o dashboard do Argo Rollouts
+com **um login só**: a conta do GitHub (via Dex). Os **times** das orgs
+definem o perfil: admin da plataforma, dev de um projeto (opera só os apps
+dele) ou leitura.
+
+```bash
+make sso-github   # sela o Client ID/secret do OAuth App (uma vez)
+make sso          # Dex + oauth2-proxy + login nas ferramentas
+```
+
+Passo a passo (times, OAuth App, primeiro login):
+[docs/18-login-sso.md](docs/18-login-sso.md).

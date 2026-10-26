@@ -1,0 +1,21 @@
+# =============================================================================
+# DNS dentro do cluster para *.devops.local (aplicado por setup-security.sh).
+#
+# O /etc/hosts do Mac resolve auth.devops.local, argocd.devops.local... só
+# para o navegador. Os pods (ArgoCD, Grafana, oauth2-proxy falando com o Dex)
+# precisam do mesmo endereço público, então o CoreDNS do k3s responde
+# *.devops.local com o IP do NGINX Ingress. Assim o tráfego interno passa pelo
+# mesmo Ingress e pelo mesmo certificado que o navegador usa.
+# O k3s importa coredns-custom/*.override dentro do bloco principal.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  devops-local.override: |
+    rewrite stop {
+      name regex (.+)\.devops\.local ingress-nginx-controller.kube-system.svc.cluster.local
+      answer auto
+    }

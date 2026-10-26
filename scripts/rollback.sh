@@ -45,12 +45,16 @@ cd "$INFRA_ROOT"
 git fetch -q origin
 git pull -q --rebase --autostash origin "$(git branch --show-current)"
 
-# Tag anterior: a primeira diferente da atual, andando para trás no histórico.
-previous_tag() {
-  local file="$1" current="$2" c tag
+# Commit do histórico do arquivo com a versão de destino: a primeira tag
+# diferente da atual (sem --to) ou a tag pedida (--to). Imprime "<commit> <tag>".
+find_target() {
+  local file="$1" current="$2" wanted="$3" c tag
   while read -r c; do
     tag="$(git show "$c:$file" 2>/dev/null | yq '.image.tag' 2>/dev/null || true)"
-    if [[ -n "$tag" && "$tag" != "null" && "$tag" != "$current" ]]; then echo "$tag"; return; fi
+    [[ -z "$tag" || "$tag" == "null" ]] && continue
+    if [[ -n "$wanted" && "$tag" == "$wanted" ]] || [[ -z "$wanted" && "$tag" != "$current" ]]; then
+      echo "$c $tag"; return
+    fi
   done < <(git log --format=%H -- "$file")
 }
 
@@ -60,12 +64,20 @@ for APP in $(project_apps "$PROJ"); do
   FILE="projects/$PROJ/apps/$APP/values-$ENV_NAME.yaml"
   [[ -f "$FILE" ]] || continue
   CURRENT="$(yq '.image.tag' "$FILE")"
-  TARGET="${TO:-$(previous_tag "$FILE" "$CURRENT")}"
+  read -r FROM_COMMIT TARGET <<<"$(find_target "$FILE" "$CURRENT" "$TO")" || true
+  TARGET="${TARGET:-$TO}"
   if [[ -z "$TARGET" ]]; then echo "↷ $APP: sem versão anterior no histórico"; continue; fi
   if [[ "$TARGET" == "$CURRENT" ]]; then echo "↷ $APP: já está em $CURRENT"; continue; fi
   printf "  %-18s %s  →  %s\n" "$APP" "$CURRENT" "$TARGET"
   FILES+=("$FILE"); SUMMARY+=("$APP@$TARGET")
   yq -i ".image.tag = \"$TARGET\"" "$FILE"
+  # O link da release (changelog no ArgoCD) volta junto com a versão.
+  if [[ -n "${FROM_COMMIT:-}" ]] && git show "$FROM_COMMIT:$FILE" | yq -e '.release' >/dev/null 2>&1; then
+    REL="$(git show "$FROM_COMMIT:$FILE" | yq -o=json -I=0 '.release')"
+    yq -i ".release = $REL" "$FILE"
+  else
+    yq -i 'del(.release)' "$FILE"
+  fi
 done
 
 if [[ ${#FILES[@]} -eq 0 ]]; then echo "Nada para voltar."; exit 0; fi

@@ -30,3 +30,9 @@ redis:
 # Demais segredos do crivo-be (JWT, Stripe, Cloudinary, ...) → Secret
 # `app-secrets`, a partir de secrets/<env>.env (gitignored) ou, na falta dele,
 # secrets/example.env (valores de lab).
+
+# Quem desenvolve este projeto (times do GitHub, "<org>:<time>"): sync,
+# rollback e ações do canary só nos apps deste projeto. docs/18-login-sso.md
+access:
+  devs:
+    - crivo-sync:devs

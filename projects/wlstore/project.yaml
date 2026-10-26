@@ -38,3 +38,9 @@ database:
 rabbitmq:
   enabled: true
   user: wlstore
+
+# Quem desenvolve este projeto (times do GitHub, "<org>:<time>"): sync,
+# rollback e ações do canary só nos apps deste projeto. docs/18-login-sso.md
+access:
+  devs:
+    - whitelabel-store:devs

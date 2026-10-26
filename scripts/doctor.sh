@@ -238,6 +238,20 @@ elif kubectl version >/dev/null 2>&1; then
   else warn "Argo Rollouts não instalado"; hint "make delivery"; fi
 fi
 
+# --- Login único --------------------------------------------------------------
+section "Login único (SSO)"
+if [[ -f "$INFRA_ROOT/config/auth/github-oauth.sealed.yaml" ]]; then
+  ok "OAuth App do GitHub selado (config/auth/github-oauth.sealed.yaml)"
+  if kubectl get deploy dex -n auth >/dev/null 2>&1 && kubectl get deploy oauth2-proxy -n auth >/dev/null 2>&1; then
+    ok "Dex e oauth2-proxy no ar (https://auth.devops.local)"
+  elif kubectl version >/dev/null 2>&1; then
+    warn "Dex/oauth2-proxy não instalados"; hint "make sso"
+  fi
+else
+  warn "login único não configurado (senhas locais no ArgoCD/Grafana; Prometheus e Rollouts sem login)"
+  hint "docs/18-login-sso.md → OAuth App + make sso-github + make sso"
+fi
+
 # --- GitHub ------------------------------------------------------------------
 section "GitHub (repos dos apps)"
 slug() { sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##; s#/$##' <<<"$1"; }

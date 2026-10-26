@@ -30,3 +30,18 @@ spec:
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
+  {{- with (.Values.access).devs }}
+  # Perfil "dev do projeto" (login único, docs/18-login-sso.md): quem está num
+  # destes times do GitHub opera SÓ os apps deste projeto. Leitura do resto
+  # vem do policy.default (role:readonly) do ArgoCD.
+  roles:
+    - name: dev
+      description: Desenvolvedores do projeto {{ $name }}
+      groups:
+        {{- toYaml . | nindent 8 }}
+      policies:
+        - p, proj:{{ $name }}:dev, applications, get, {{ $name }}/*, allow
+        - p, proj:{{ $name }}:dev, applications, sync, {{ $name }}/*, allow
+        - p, proj:{{ $name }}:dev, applications, action/*, {{ $name }}/*, allow
+        - p, proj:{{ $name }}:dev, logs, get, {{ $name }}/*, allow
+  {{- end }}

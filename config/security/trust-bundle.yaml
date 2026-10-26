@@ -1,0 +1,18 @@
+# =============================================================================
+# Distribui o certificado da CA local para TODOS os namespaces (trust-manager),
+# no ConfigMap `platform-ca` (chave ca.crt). Quem chama https://*.devops.local
+# de dentro do cluster monta esse ConfigMap para confiar no certificado
+# (ArgoCD, Grafana e oauth2-proxy → Dex). Aplicado por setup-security.sh.
+# =============================================================================
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: platform-ca
+spec:
+  sources:
+    - secret:
+        name: platform-ca      # a CA criada em config/security/platform-ca.yaml
+        key: ca.crt
+  target:
+    configMap:
+      key: ca.crt

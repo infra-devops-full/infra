@@ -23,6 +23,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CFG="$INFRA_ROOT/config/observability"
+# shellcheck source=lib-sso.sh
+source "$SCRIPT_DIR/lib-sso.sh"
+
+# --only-kps: só o kube-prometheus-stack (usado pelo setup-sso.sh).
+ONLY_KPS=false
+[[ "${1:-}" == "--only-kps" ]] && ONLY_KPS=true
+
+# Login único configurado (make sso)? Então Grafana/Prometheus/Alertmanager
+# sobem com ele — senão um `make observability` desligaria o login.
+SSO_VALUES=()
+if sso_enabled; then
+  SSO_TMP="$(mktemp -d)"; trap 'rm -rf "$SSO_TMP"' EXIT
+  sso_render "$SSO_TMP" >/dev/null
+  SSO_VALUES=(-f "$SSO_TMP/kube-prometheus-stack.json")
+fi
 
 KPS_CHART_VERSION="92.11.0"
 LOKI_CHART_VERSION="7.3.0"
@@ -46,8 +61,9 @@ step "kube-prometheus-stack $KPS_CHART_VERSION (Prometheus, Alertmanager, Grafan
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --version "$KPS_CHART_VERSION" \
   --namespace monitoring --create-namespace \
-  -f "$CFG/kube-prometheus-stack-values.yaml" \
+  -f "$CFG/kube-prometheus-stack-values.yaml" ${SSO_VALUES[@]+"${SSO_VALUES[@]}"} \
   --timeout 10m --wait >/dev/null
+$ONLY_KPS && exit 0
 
 step "NGINX Ingress: métricas + ServiceMonitor"
 helm upgrade ingress-nginx ingress-nginx/ingress-nginx \

@@ -4,9 +4,12 @@
 # e lidos do projects/<p>/project.yaml (passado como values file):
 #   description   texto do projeto na UI do ArgoCD (opcional)
 #   appRepos / appRepo  repos de código (viram links no AppProject)
+#   access.devs         times do GitHub com perfil "dev" no projeto (SSO)
 project:
   name: ""
 infraRepoUrl: ""
 description: ""
 appRepos: []
 appRepo: ""
+access:
+  devs: []
