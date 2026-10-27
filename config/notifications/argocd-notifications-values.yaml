@@ -3,7 +3,9 @@
 # Aplicado por setup-notifications.sh (make notifications) quando o Secret
 # argocd-notifications-secret existe. docs/20-notificacoes.md
 #
-#   🚀 deploy em prod / 🧪 deploy em develop   (uma vez por revisão do Git)
+#   🚀 release X.Y.Z em prod / 🧪 build sha-xxx em develop
+#        uma vez por VERSÃO do app (tag da imagem do próprio app): mudança só
+#        de configuração na infra não avisa; ela aparece no ArgoCD e no Git
 #   ❌ sync falhou                              (manifesto inválido, política recusou...)
 #   ⚠️ app degradado                            (inclui canary abortado)
 #
@@ -34,10 +36,21 @@ notifications:
 
   triggers:
     trigger.on-deployed: |
-      - description: Sync concluído e app saudável (uma vez por revisão do Git)
-        oncePer: app.status.operationState?.syncResult?.revision
+      # Uma vez por versão do APP: a tag da imagem dele (a do agente de
+      # tracing e outras do pod ficam de fora). Antes era por revisão do repo
+      # de infra, e um commit de configuração avisava como se fosse deploy.
+      # Só quando sobra UMA imagem do app: durante o canary as duas versões
+      # convivem (1.1.0,1.2.0 → 1.2.0) e a chave mudaria, repetindo o aviso.
+      # Só syncs dos últimos 30 min (cobre o canary): apps que já estavam no
+      # ar não avisam de novo quando esta regra muda ou o controller reinicia.
+      - description: Versão nova do app no ar (canary concluído)
+        oncePer: join(filter(app.status.summary.images, {# contains ("/" + app.metadata.labels["devops-platform/app"] + ":")}), ",")
         send: [app-deployed]
-        when: app.status.operationState != nil and app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+        when: >-
+          app.status.operationState != nil and app.status.operationState.phase in ['Succeeded']
+          and app.status.health.status == 'Healthy'
+          and len(filter(app.status.summary.images, {# contains ("/" + app.metadata.labels["devops-platform/app"] + ":")})) == 1
+          and time.Now().Sub(time.Parse(app.status.operationState.finishedAt)).Minutes() < 30
     trigger.on-sync-failed: |
       - description: Sync falhou
         oncePer: app.status.operationState?.syncResult?.revision
@@ -50,29 +63,39 @@ notifications:
         when: app.status.health.status == 'Degraded'
 
   templates:
-    # Campos comuns: projeto/ambiente/app (labels do ApplicationSet), versão
-    # (imagem no ar), commit do repo de infra e link para o ArgoCD.
+    # prod: a versão chega por release (make release) → "Release X.Y.Z", com
+    # link para o changelog. develop: cada push vira um build sha-<commit>.
+    # O repo do app sai do nome da imagem (convenção do CI:
+    # ghcr.io/<org>/<repo>/<app>); a tag do release é v<versão>.
     template.app-deployed: |
       webhook:
         discord-deploys:
           method: POST
           body: |
             {{- $l := .app.metadata.labels -}}
+            {{- $app := index $l "devops-platform/app" -}}
             {{- $env := index $l "devops-platform/env" -}}
-            {{- $rev := .app.status.sync.revision -}}
-            {{- $img := "" -}}{{- range .app.status.summary.images -}}{{- $img = . -}}{{- end -}}
+            {{- $prod := eq $env "prod" -}}
+            {{- $img := "" -}}{{- range .app.status.summary.images -}}{{- if contains (printf "/%s:" $app) . -}}{{- $img = . -}}{{- end -}}{{- end -}}
             {{- $ver := splitList ":" $img | last | default "?" -}}
+            {{- $parts := splitList "/" (splitList ":" $img | first) -}}
+            {{- $repo := "" -}}{{- if ge (len $parts) 3 -}}{{- $repo = printf "https://github.com/%s/%s" (index $parts 1) (index $parts 2) -}}{{- end -}}
+            {{- $link := "" -}}
+            {{- if and $repo $prod -}}{{- $link = printf "[v%s](%s/releases/tag/v%s)" $ver $repo $ver -}}
+            {{- else if and $repo (hasPrefix "sha-" $ver) -}}{{- $link = printf "[%s](%s/commit/%s)" (trimPrefix "sha-" $ver) $repo (trimPrefix "sha-" $ver) -}}{{- end -}}
             {
               "username": "ArgoCD",
               "embeds": [{
-                "title": {{ printf "%s %s → %s" (ternary "🚀" "🧪" (eq $env "prod")) (index $l "devops-platform/app") $env | toJson }},
+                "title": {{ ternary (printf "🚀 Release %s · %s em prod" $ver $app) (printf "🧪 %s · %s em develop" $ver $app) $prod | toJson }},
                 "url": {{ printf "%s/applications/argocd/%s" .context.argocdUrl .app.metadata.name | toJson }},
-                "color": {{ ternary 3066993 3447003 (eq $env "prod") }},
-                "description": {{ printf "Versão `%s` no ar em `%s`.%s" $ver .app.spec.destination.namespace (ternary " Canary concluído (20% → 50% → 100%)." "" (eq $env "prod")) | toJson }},
+                "color": {{ ternary 3066993 3447003 $prod }},
+                "description": {{ ternary (printf "Versão `%s` no ar em `%s` (canary 20%% → 50%% → 100%% concluído)." $ver .app.spec.destination.namespace) (printf "Build `%s` no ar em `%s`. Teste e, quando aprovar, `make release PROJECT=%s`." $ver .app.spec.destination.namespace (index $l "devops-platform/project")) $prod | toJson }},
                 "fields": [
                   {"name": "Projeto", "value": {{ index $l "devops-platform/project" | toJson }}, "inline": true},
-                  {"name": "Versão", "value": {{ $ver | toJson }}, "inline": true},
-                  {"name": "Revisão da infra", "value": {{ printf "[%s](%s/commit/%s)" (trunc 7 $rev) (trimSuffix ".git" .app.spec.source.repoURL) $rev | toJson }}, "inline": true}
+                  {"name": "Versão", "value": {{ $ver | toJson }}, "inline": true}
+                  {{- if $link -}},
+                  {"name": {{ ternary "Changelog" "Commit" $prod | toJson }}, "value": {{ $link | toJson }}, "inline": true}
+                  {{- end }}
                 ]
               }]
             }

@@ -6,7 +6,7 @@
 | ----- | ------ | ------ | ------ |
 | `#alertas` | alertas **critical/warning** de **prod** e da plataforma | Alertmanager | a cada 4h enquanto durar |
 | `#alertas-develop` | alertas de **develop** e do lab `treino` | Alertmanager | a cada 24h |
-| `#deploys` | 🚀 deploy em prod · 🧪 deploy em develop · ❌ sync falhou · ⚠️ app degradado (inclui canary abortado) | ArgoCD Notifications | uma vez por revisão do Git |
+| `#deploys` | 🚀 release em prod · 🧪 build em develop · ❌ sync falhou · ⚠️ app degradado (inclui canary abortado) | ArgoCD Notifications | deploy: uma vez por **versão** do app |
 
 Alertas `info` e o `Watchdog` não notificam. Inibições continuam valendo
 (app fora do ar não manda também "queimando o error budget").
@@ -31,10 +31,30 @@ preenchida.
 **Deploy** (`#deploys`):
 
 ```
-🚀 crivo-be → prod                                  (link para o ArgoCD)
-Versão `1.4.0` no ar em `crivo-prod`. Canary concluído (20% → 50% → 100%).
-Projeto: crivo   Versão: 1.4.0   Revisão da infra: e948ba8
+🚀 Release 1.1.0 · wlstore-fe em prod               (link para o ArgoCD)
+Versão `1.1.0` no ar em `wlstore-prod` (canary 20% → 50% → 100% concluído).
+Projeto: wlstore   Versão: 1.1.0   Changelog: v1.1.0 (GitHub Release)
+
+🧪 sha-a460df2 · wlstore-fe em develop
+Build `sha-a460df2` no ar em `wlstore-develop`. Teste e, quando aprovar, `make release PROJECT=wlstore`.
+Projeto: wlstore   Versão: sha-a460df2   Commit: a460df2
 ```
+
+Quando avisa um deploy:
+
+- **uma vez por versão do app**, ou seja, pela tag da imagem do próprio app
+  (`1.1.0`, `sha-a460df2`). Imagens auxiliares do pod, como o agente de
+  tracing, não contam;
+- **mudança só de configuração não avisa**: um commit no repo de infra que
+  muda env, recursos ou tracing de vários apps não vira uma mensagem por app.
+  O canary roda igual, e a mudança fica visível no ArgoCD e no Git. Se o
+  canary falhar, o ⚠️ avisa;
+- **só quando o canary termina** (sobra uma versão do app no ar) e **só
+  syncs dos últimos 30 min**: trocar estas regras ou reiniciar o
+  controller não reenvia avisos de apps que já estavam no ar.
+
+O link do changelog sai do nome da imagem (convenção do CI:
+`ghcr.io/<org>/<repo>/<app>`) e da tag `v<versão>` criada pelo `make release`.
 
 ## Configurar (uma vez)
 
@@ -58,8 +78,9 @@ Projeto: crivo   Versão: 1.4.0   Revisão da infra: e948ba8
    make notify-test     # 1 alerta em cada canal de alerta (resolve em ~3 min) + 1 deploy
    ```
 
-> **Na primeira ativação** o `#deploys` recebe um "deploy" de cada app: o
-> ArgoCD nunca tinha notificado a revisão atual deles. Acontece uma vez só.
+> **Num cluster novo** (`make destroy && make setup`) o `#deploys` recebe um
+> aviso de cada app: eles acabaram de subir e o ArgoCD não guarda o histórico
+> de avisos de um cluster para o outro. Acontece uma vez por setup.
 
 > **Cuidado:** `argocd admin notifications template notify …` imprime, em
 > log debug, a URL completa do webhook. Use `make notify-test`, que confere
@@ -103,6 +124,8 @@ notificações.
 | nada chega | webhooks não selados/aplicados | `make notifications` mostra o que falta |
 | alerta aparece no Alertmanager mas não no Discord | rota não casou (ex.: severidade `info`) | `amtool config routes test` (ver docs/13) |
 | Discord recusa (log do Alertmanager: `400`) | mensagem passou do limite (4096) | menos alertas por grupo (`group_by`) ou encurtar o template |
-| `#deploys` silencioso num deploy | a revisão já tinha sido notificada (uma vez por revisão) | esperado |
+| `#deploys` silencioso num deploy | a versão do app não mudou (só configuração), ou essa versão já tinha sido avisada | esperado: o aviso é por versão |
+| vários avisos de deploy de uma vez | cluster recém-criado (`make setup`): cada app sobe e avisa uma vez | esperado; não se repete |
+| avisos repetidos logo depois de mudar `trigger.on-deployed` | o "já avisei" do ArgoCD inclui um hash da condição: regra nova = chave nova para os apps sincronizados nos últimos 30 min | para mudar a regra sem repetir avisos, aplique (`make notifications`) quando nenhum app tiver sincronizado nos últimos 30 min |
 | `make notify-test` falhou logo após `make notifications` | o controller do ArgoCD estava reiniciando | rodar de novo (o script atual espera o rollout) |
 | alerta falso de um namespace de infra | namespace fora da lista de exclusão das regras | `INFRA` em `scripts/dev/gen-prometheus-rules.py` + `make gen-observability` |
