@@ -261,6 +261,25 @@ elif kubectl version >/dev/null 2>&1; then
   fi
 fi
 
+# --- Tracing -------------------------------------------------------------------
+section "Tracing (Tempo + OpenTelemetry)"
+if kubectl get statefulset tempo -n monitoring >/dev/null 2>&1; then
+  ok "Tempo instalado (Grafana → Explore → Tempo; Platform / Apps → Traces)"
+  if kubectl get deploy -n opentelemetry-operator-system opentelemetry-operator >/dev/null 2>&1; then ok "OpenTelemetry Operator instalado"
+  else warn "OpenTelemetry Operator ausente — apps com tracing.enabled sobem sem agente"; hint "make tracing"; fi
+  if kubectl get instrumentation platform -n monitoring >/dev/null 2>&1; then ok "Instrumentation monitoring/platform"
+  else warn "Instrumentation monitoring/platform ausente"; hint "make apply-argocd"; fi
+  if ! kubectl get svc alloy -n monitoring -o jsonpath='{.spec.ports[*].port}' 2>/dev/null | grep -qw 4318; then
+    warn "Alloy sem a porta OTLP (4318): os spans não chegam ao Tempo"; hint "make observability"
+  fi
+  TRACED="$(grep -l -A1 "^tracing:" "$INFRA_ROOT"/projects/*/apps/*/values*.yaml 2>/dev/null | xargs grep -l "enabled: true" 2>/dev/null | sed -E 's#.*/projects/([^/]+)/apps/([^/]+)/.*#\1/\2#' | sort -u | xargs)"
+  [[ -n "$TRACED" ]] && ok "apps com tracing: $TRACED"
+elif kubectl version >/dev/null 2>&1; then
+  if grep -qs -A1 "^tracing:" "$INFRA_ROOT"/projects/*/apps/*/values*.yaml; then
+    err "há apps com tracing.enabled, mas o Tempo/operador não estão instalados"; hint "make tracing && make observability"
+  fi
+fi
+
 # --- Login único --------------------------------------------------------------
 section "Login único (SSO)"
 if [[ -f "$INFRA_ROOT/config/auth/github-oauth.sealed.yaml" ]]; then

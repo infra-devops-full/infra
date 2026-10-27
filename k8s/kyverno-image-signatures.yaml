@@ -9,7 +9,8 @@
 # apply-platform.sh em ${SIGNING_SUBJECT_REGEX}).
 #
 # Imagem de fora do ghcr.io (redis, rabbitmq...) não é verificada, nem as do
-# CloudNativePG (ghcr.io/cloudnative-pg/: os bancos, docs/21-banco-de-dados.md):
+# CloudNativePG (ghcr.io/cloudnative-pg/: os bancos, docs/21-banco-de-dados.md)
+# e as dos agentes do OpenTelemetry (ghcr.io/open-telemetry/, docs/22-tracing.md):
 # são componentes da plataforma com versão fixada, não código dos projetos.
 # Começa em Audit (relatório): as imagens que já rodavam não eram assinadas.
 # Quando todas forem rebuildadas, troque para [Deny]. docs/19-assinatura-de-imagem.md
@@ -39,6 +40,7 @@ spec:
     # Imagem fora daqui não é verificada (nem conta como "não verificada").
     - expression: >-
         ref.startsWith("ghcr.io/") && !ref.startsWith("ghcr.io/cloudnative-pg/")
+        && !ref.startsWith("ghcr.io/open-telemetry/")
   attestors:
     - name: platformCI
       cosign:

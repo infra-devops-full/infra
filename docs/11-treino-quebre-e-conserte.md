@@ -746,6 +746,44 @@ make db-status PROJECT=crivo ENV=develop    # a hora anotada está na janela?
 
 ---
 
+## Exercício 21: siga a requisição (tracing)
+
+Gere tráfego no catalog do wlstore develop, com uma rota que existe e uma
+que não existe:
+
+```bash
+H=develop.catalog-service.wlstore.local; T=$(uuidgen | tr A-Z a-z)
+for i in $(seq 1 30); do
+  curl -s -o /dev/null --resolve $H:80:127.0.0.1 -H "X-Tenant-Id: $T" "http://$H/api/v1/products?page=$i"
+  curl -s -o /dev/null --resolve $H:80:127.0.0.1 -H "X-Tenant-Id: $T" "http://$H/api/v1/nao-existe"
+done
+```
+
+Responda só pelo Grafana: (1) quanto tempo da requisição foi gasto no banco?
+(2) qual query rodou? (3) o que o app logou durante a requisição com erro?
+
+<details><summary>Dica</summary>
+
+*Explore → Tempo → Search*: Service Name `catalog-service`. Ou TraceQL:
+`{resource.service.name="catalog-service" && resource.deployment.environment.name="develop"}`.
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+- O trace de `GET /api/v1/products` tem um span filho por query
+  (`SELECT ... tb_product`, atributo `db.query.text`): a barra mostra a
+  fração do tempo total. Foi o agente Java que mediu, sem nenhum código.
+- O de `/nao-existe` termina em 404 sem spans de banco: o app respondeu
+  antes de consultar.
+- *Logs for this span* abre o Loki filtrado pelo pod e pelo horário. Nas
+  linhas do catalog aparece `trace_id=...`: clique e volte ao trace.
+- Repare no mapa de serviços (*Platform / Apps → Traces*): o tráfego entra
+  por `user` (o NGINX não é instrumentado).
+- Mais em [22-tracing.md](22-tracing.md).
+</details>
+
+---
+
 ## Desafio final: o incidente misterioso
 
 Peça para alguém (ou faça você, sem olhar) aplicar **duas** quebras ao mesmo
@@ -778,3 +816,4 @@ Esse formato (sintoma → evidência → causa → correção → prevenção) �
 | `denied the request` / `violates PodSecurity` no apply | política de admissão (Kyverno / Pod Security) | a própria mensagem; `make policies` |
 | Rollout `Degraded` / `RolloutAborted` | a análise reprovou o canary ou ele não ficou pronto | `make rollouts`, `kubectl get analysisrun` |
 | dados sumiram, banco "saudável" | erro humano (`DELETE`, migration ruim) | `make db-status` (janela) → `make db-restore-test TIME=... KEEP=1` |
+| "está lento", mas CPU e memória normais | tempo gasto em outra etapa (banco, outro serviço, fila) | trace no Tempo: qual span ocupa a barra |

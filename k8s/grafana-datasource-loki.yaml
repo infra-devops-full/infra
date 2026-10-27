@@ -21,3 +21,10 @@ data:
         access: proxy
         jsonData:
           maxLines: 1000
+          # Linha de log com trace id (trace_id=..., "traceId":"...") ganha
+          # um link para o trace no Tempo. docs/22-tracing.md
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '(?:trace_id|traceId|traceid)["=:\s]+"?([0-9a-f]{32})'
+              datasourceUid: tempo
+              url: '$${__value.raw}'

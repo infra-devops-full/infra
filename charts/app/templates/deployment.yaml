@@ -68,9 +68,15 @@ spec:
     metadata:
       labels:
         {{- include "app.selectorLabels" . | nindent 8 }}
-      {{- with .Values.podAnnotations }}
+      {{- $tracing := include "app.tracingAnnotations" . }}
+      {{- if or .Values.podAnnotations $tracing }}
       annotations:
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with $tracing }}
+        {{- . | nindent 8 }}
+        {{- end }}
       {{- end }}
     spec:
       {{- with .Values.hostAliases }}
@@ -160,9 +166,12 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.env }}
+          {{- if or .Values.env .Values.tracing.enabled }}
           env:
             {{- include "app.envVars" . | nindent 12 }}
+            {{- with include "app.tracingEnv" . }}
+            {{- . | nindent 12 }}
+            {{- end }}
           {{- end }}
           {{- if .Values.envFrom }}
           envFrom:

@@ -54,6 +54,33 @@ Aplica tpl em cada value para suportar {{ .Values.app.environment }} etc.
 {{- end }}
 
 {{/*
+Tracing: annotation que pede o agente ao OpenTelemetry Operator, e as
+variáveis que identificam o serviço nos traces. service.name = app; projeto e
+ambiente como atributos (o mesmo app existe em develop e prod).
+*/}}
+{{- define "app.tracingAnnotations" -}}
+{{- if .Values.tracing.enabled }}
+{{- if not (has .Values.tracing.language (list "java" "nodejs")) }}
+{{- fail "tracing.language precisa ser java ou nodejs" }}
+{{- end }}
+instrumentation.opentelemetry.io/inject-{{ .Values.tracing.language }}: {{ .Values.tracing.instrumentation | quote }}
+{{- end }}
+{{- end }}
+
+{{- define "app.tracingEnv" -}}
+{{- if .Values.tracing.enabled }}
+- name: OTEL_SERVICE_NAME
+  value: {{ include "app.name" . | quote }}
+- name: OTEL_RESOURCE_ATTRIBUTES
+  value: {{ printf "service.namespace=%s,deployment.environment.name=%s" .Values.app.project .Values.app.environment | quote }}
+{{- if and (eq .Values.tracing.language "java") (not (hasKey .Values.env "JAVA_TOOL_OPTIONS")) }}
+- name: JAVA_TOOL_OPTIONS
+  value: {{ .Values.tracing.javaToolOptions | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
 Host do Ingress. Usa .Values.ingress.host se definido; senão deriva
   prod:   <app>.<project>.local          (produção sem prefixo de ambiente)
   outros: <env>.<app>.<project>.local

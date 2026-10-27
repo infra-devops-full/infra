@@ -4,6 +4,7 @@
 #   cabeçalho  logo do projeto (projects/<p>/logo.png no repo de infra) + KPIs
 #   requests   métricas do NGINX Ingress (taxa, status HTTP, latência p95)
 #   logs       erros dos apps via Loki (coletados pelo Alloy)
+#   traces     mapa de serviços e traces recentes (Tempo; apps com tracing.enabled)
 #   recursos   CPU, memória, rede e restarts (cAdvisor / kube-state-metrics)
 # ${INFRA_RAW_URL} é preenchido por scripts/apply-platform.sh (envsubst).
 # O sidecar do Grafana carrega todo ConfigMap com grafana_dashboard=1.
@@ -64,7 +65,7 @@ data:
               "query": "label_values(kube_namespace_created, namespace)",
               "refId": "project"
             },
-            "regex": "/^(?!kube-|monitoring$|argocd$|argo-rollouts$|cert-manager$|cnpg-system$|default$|tooling$|local-path-storage$)(.+)-[^-]+$/",
+            "regex": "/^(?!kube-|monitoring$|argocd$|argo-rollouts$|cert-manager$|cnpg-system$|opentelemetry-operator-system$|default$|tooling$|local-path-storage$)(.+)-[^-]+$/",
             "refresh": 2,
             "sort": 1,
             "multi": false,
@@ -723,13 +724,79 @@ data:
         },
         {
           "type": "row",
+          "title": "Traces (Tempo)",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 42,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "type": "nodeGraph",
+          "title": "Mapa de serviços (quem chama quem)",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "description": "Gerado dos traces (Tempo metrics-generator). Só aparecem apps com tracing.enabled nos values. docs/22-tracing.md",
+          "gridPos": {
+            "x": 0,
+            "y": 43,
+            "w": 10,
+            "h": 11
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "tempo"
+              },
+              "queryType": "serviceMap",
+              "serviceMapQuery": "{service_namespace=\"$project\", deployment_environment_name=\"$env\"}"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Traces recentes (clique no Trace ID)",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "description": "Últimos traces dos apps selecionados. Abra um para ver o caminho da requisição entre os serviços, o tempo de cada etapa e os logs do mesmo pod.",
+          "gridPos": {
+            "x": 10,
+            "y": 43,
+            "w": 14,
+            "h": 11
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "tempo"
+              },
+              "queryType": "traceql",
+              "tableType": "traces",
+              "limit": 20,
+              "query": "{resource.service.namespace=\"$project\" && resource.deployment.environment.name=\"$env\" && resource.service.name=~\"${app:regex}\"}"
+            }
+          ]
+        },
+        {
+          "type": "row",
           "title": "Recursos (CPU, memória, rede)",
           "collapsed": false,
           "panels": [],
           "id": 14,
           "gridPos": {
             "x": 0,
-            "y": 42,
+            "y": 54,
             "w": 24,
             "h": 1
           }
@@ -782,7 +849,7 @@ data:
           "id": 15,
           "gridPos": {
             "x": 0,
-            "y": 43,
+            "y": 55,
             "w": 12,
             "h": 8
           }
@@ -835,7 +902,7 @@ data:
           "id": 16,
           "gridPos": {
             "x": 12,
-            "y": 43,
+            "y": 55,
             "w": 12,
             "h": 8
           }
@@ -888,7 +955,7 @@ data:
           "id": 17,
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 63,
             "w": 8,
             "h": 7
           }
@@ -941,7 +1008,7 @@ data:
           "id": 18,
           "gridPos": {
             "x": 8,
-            "y": 51,
+            "y": 63,
             "w": 8,
             "h": 7
           }
@@ -994,7 +1061,7 @@ data:
           "id": 19,
           "gridPos": {
             "x": 16,
-            "y": 51,
+            "y": 63,
             "w": 8,
             "h": 7
           }
@@ -1041,7 +1108,7 @@ data:
           "id": 20,
           "gridPos": {
             "x": 0,
-            "y": 58,
+            "y": 70,
             "w": 24,
             "h": 1
           }

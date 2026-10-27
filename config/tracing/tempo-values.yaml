@@ -1,0 +1,53 @@
+# =============================================================================
+# Grafana Tempo 3 (grafana-community/tempo, single binary) — guarda os traces
+# dos apps. (O chart grafana/tempo foi depreciado e passou para grafana-community.)
+# Instalado por scripts/setup-tracing.sh (make tracing). docs/22-tracing.md
+#
+#   apps (agente OpenTelemetry) ──OTLP──► Alloy ──OTLP──► Tempo ◄── Grafana
+#                                                           │
+#                                metrics-generator ─remote write─► Prometheus
+#                                (mapa de serviços e RED por rota)
+# =============================================================================
+tempo:
+  resources:
+    requests: { cpu: 20m, memory: 128Mi }
+    limits:   { memory: 512Mi }
+  reportingEnabled: false
+  retention: 72h            # traces são volumosos; métricas e logs ficam 7d
+
+  # Só OTLP: quem fala com o Tempo é o Alloy (o chart abre Jaeger/OpenCensus
+  # por padrão, portas que ninguém usa aqui).
+  receivers:
+    otlp:
+      protocols:
+        grpc: { endpoint: "0.0.0.0:4317" }
+        http: { endpoint: "0.0.0.0:4318" }
+
+  # Gera métricas a partir dos spans e manda para o Prometheus:
+  #   traces_service_graph_*        quem chama quem (Service Graph do Grafana)
+  #   traces_spanmetrics_*          taxa, erro e latência por serviço/rota
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: http://kube-prometheus-stack-prometheus.monitoring.svc:9090/api/v1/write
+    storage:
+      path: /var/tempo/generator/wal
+    registry:
+      external_labels:
+        source: tempo
+    # Mesmo app em develop e prod tem o mesmo service.name: o ambiente e o
+    # projeto (atributos que o chart põe em cada span) viram labels, senão as
+    # métricas e o mapa misturam os dois.
+    #   → labels deployment_environment_name, service_namespace (também no grafo)
+    processor:
+      service_graphs:
+        dimensions: [deployment.environment.name, service.namespace]
+      span_metrics:
+        dimensions: [deployment.environment.name, service.namespace]
+  overrides:
+    defaults:
+      metrics_generator:
+        processors: [service-graphs, span-metrics]
+
+persistence:
+  enabled: true
+  size: 2Gi

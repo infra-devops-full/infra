@@ -1,0 +1,31 @@
+# =============================================================================
+# OpenTelemetry Operator — instrumenta os apps SEM mudar código.
+# Instalado por scripts/setup-tracing.sh (make tracing). docs/22-tracing.md
+#
+# Um pod com a annotation instrumentation.opentelemetry.io/inject-<linguagem>
+# (o chart põe, com `tracing.enabled` nos values) ganha, na criação, um init
+# container que copia o agente OpenTelemetry (Java ou Node.js) e as variáveis
+# que o ligam (JAVA_TOOL_OPTIONS / NODE_OPTIONS, OTEL_*). Configuração do
+# agente: k8s/otel-instrumentation.yaml.
+# =============================================================================
+manager:
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }
+    limits:   { memory: 256Mi }
+  # Os coletores ficam com o Alloy; o operador aqui só injeta os agentes.
+  collectorImage:
+    repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-k8s
+
+admissionWebhooks:
+  certManager:
+    enabled: true          # cert-manager da plataforma (setup-security.sh)
+  autoGenerateCert:
+    enabled: false
+  pods:
+    failurePolicy: Ignore  # operador fora do ar = pod sobe sem agente, não deixa de subir
+    # Só pods dos namespaces de projeto, como o Kyverno: a plataforma nunca
+    # passa por este webhook. (O Instrumentation, em monitoring, continua
+    # pelo webhook dele, que preenche as imagens dos agentes.)
+    namespaceSelector:
+      matchExpressions:
+        - { key: devops-platform/project, operator: Exists }

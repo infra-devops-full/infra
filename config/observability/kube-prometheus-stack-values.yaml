@@ -32,6 +32,9 @@ prometheus:
     # corta antes se o disco do lab encher.
     retention: 7d
     retentionSize: 4GB
+    # O Tempo (metrics-generator) escreve aqui as métricas tiradas dos traces:
+    # mapa de serviços e taxa/erro/latência por rota. docs/22-tracing.md
+    enableRemoteWriteReceiver: true
     scrapeInterval: 60s
     evaluationInterval: 60s
     resources:

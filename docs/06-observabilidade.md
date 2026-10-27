@@ -6,7 +6,7 @@
 | ----- | --------------------- | --------------- |
 | **Métricas** | está bom? quanto? desde quando? | Prometheus (+ NGINX Ingress, cAdvisor, kube-state-metrics) |
 | **Logs** | o que exatamente aconteceu? | Loki (coletado pelo Alloy) |
-| **Traces** | por onde o request passou e onde demorou? | *(fase 6 do roteiro: OpenTelemetry + Tempo)* |
+| **Traces** | por onde o request passou e onde demorou? | Tempo, via agentes OpenTelemetry ([22-tracing.md](22-tracing.md)) |
 
 ## Página inicial: *Platform / Início*
 
@@ -51,6 +51,7 @@ Ambiente → App**.
 | Seção | Painéis | Fonte |
 | ----- | ------- | ----- |
 | Cabeçalho | logo, pods rodando, requests/s, % 5xx, erros no log | `projects/<p>/logo.png` + as fontes abaixo |
+| Traces (Tempo) | mapa de serviços (quem chama quem) e traces recentes, com link | Tempo (apps com `tracing.enabled`, [22-tracing.md](22-tracing.md)) |
 
 O filtro **App** lista os donos dos ReplicaSets do namespace
 (`kube_replicaset_owner`): Deployments (develop e dependências) **e**
@@ -146,6 +147,7 @@ Labels disponíveis: `project`, `env`, `app`, `namespace`, `pod`, `container`.
 | Alloy 1.13.0 | `setup-observability.sh` | `config/observability/alloy-values.yaml` |
 | datasource Loki + dashboards | `apply-platform.sh` | `k8s/*.yaml` (sidecars do Grafana); home em `grafana.ini` → `default_home_dashboard_path` |
 | métricas do cert-manager e do RabbitMQ | `setup-observability.sh` / `setup-rabbitmq.sh` | ServiceMonitors |
+| Tempo 3.1 + OpenTelemetry Operator | `setup-tracing.sh` (`make tracing`) | `config/tracing/*.yaml`, `k8s/otel-instrumentation.yaml`, `k8s/grafana-datasource-tempo.yaml`; o Alloy recebe os spans (OTLP) |
 
 Reinstalar/atualizar num cluster existente: `make observability`.
 

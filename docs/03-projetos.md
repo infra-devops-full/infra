@@ -102,6 +102,12 @@ chart gera um Rollout do Argo Rollouts (20% → 50% → 100% dos requests, com
 análise de 5xx). Passos, limite de erro e aprovação manual são ajustáveis
 por app. Veja [15-entrega-progressiva.md](15-entrega-progressiva.md).
 
+### Tracing
+
+`tracing: {enabled: true, language: java|nodejs}` nos values: o OpenTelemetry
+Operator injeta o agente no pod e as requisições viram traces no Tempo, sem
+mudar o código. Veja [22-tracing.md](22-tracing.md).
+
 ## Adicionar…
 
 | Quero adicionar | Passos |

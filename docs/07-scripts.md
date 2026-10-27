@@ -16,6 +16,7 @@ make setup
        ├─ setup-observability.sh          Prometheus/Alertmanager/Grafana, métricas, Loki, Alloy
        ├─ setup-delivery.sh               Argo Rollouts (canary)
        ├─ setup-data.sh                   CloudNativePG + backup (S3 fora do cluster)
+       ├─ setup-tracing.sh                Tempo + OpenTelemetry Operator
        ├─ setup-sealed-secrets.sh         controller + restaura/backup da chave
        ├─ apply-project.sh  (por projeto)
        │    ├─ kubectl apply sealed/<env>/  (SealedSecrets → Secrets)
@@ -43,6 +44,7 @@ lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts 
 | `setup-sealed-secrets.sh` | instalar o controller do Sealed Secrets e fazer backup/restauração da chave | `make sealed-secrets` |
 | `seal-secrets.sh` | `secrets/<env>.env` → `sealed/<env>/*.yaml` (gera senhas de infra que faltarem) | `make seal` |
 | `setup-data.sh` | storage de backup (S3 num container fora do cluster), operador CloudNativePG e plugin de backup | `make data` |
+| `setup-tracing.sh` | Tempo (traces + métricas geradas) e OpenTelemetry Operator (agentes injetados) | `make tracing` |
 | `setup-postgres.sh` | Postgres de um namespace (Cluster do CloudNativePG, backups, bancos extras); restaura do backup se houver | `make postgres`, via `apply-project.sh` |
 | `db.sh` | status, backup, restauração (PITR), teste de restauração e psql | `make db-*` |
 | `setup-redis.sh` / `setup-rabbitmq.sh` | Redis e RabbitMQ, com credenciais dos Secrets `redis`/`rabbitmq` | via `apply-project.sh` |

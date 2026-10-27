@@ -1,0 +1,52 @@
+# =============================================================================
+# Datasource Tempo no Grafana (traces dos apps), ligado aos outros dois:
+#   trace → logs     botão "Logs for this span": Loki, mesmo pod, ±5 min
+#   trace → métricas taxa/erro/latência do serviço (span metrics no Prometheus)
+#   Service Graph    quem chama quem, a partir de traces_service_graph_*
+# Tempo é instalado por scripts/setup-tracing.sh. docs/22-tracing.md
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-datasource-tempo
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  tempo.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        url: http://tempo.monitoring.svc.cluster.local:3200
+        access: proxy
+        jsonData:
+          nodeGraph:
+            enabled: true
+          serviceMap:
+            datasourceUid: prometheus
+          search:
+            hide: false
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            filterByTraceID: false
+            tags:
+              - { key: k8s.namespace.name, value: namespace }
+              - { key: k8s.pod.name, value: pod }
+          tracesToMetrics:
+            datasourceUid: prometheus
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            tags:
+              - { key: service.name, value: service }
+              - { key: deployment.environment.name, value: deployment_environment_name }
+            queries:
+              - name: Requests/s
+                query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))'
+              - name: Erros/s
+                query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags, status_code="STATUS_CODE_ERROR"}[5m]))'
+              - name: p95
+                query: 'histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])))'

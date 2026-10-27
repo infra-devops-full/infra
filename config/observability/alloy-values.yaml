@@ -12,6 +12,9 @@
 #   project    <projeto>       env  <env>
 #   app        label app.kubernetes.io/name do pod (ou `app`) — o nome do app
 #   pod, container
+#
+# Também recebe os TRACES dos apps (OTLP, portas 4317 gRPC / 4318 HTTP), vindos
+# dos agentes OpenTelemetry, e repassa ao Tempo. docs/22-tracing.md
 # =============================================================================
 controller:
   type: deployment
@@ -21,6 +24,9 @@ alloy:
   resources:
     requests: { cpu: 20m, memory: 96Mi }
     limits: { cpu: 300m, memory: 256Mi }
+  extraPorts:
+    - { name: otlp-grpc, port: 4317, targetPort: 4317, protocol: TCP, appProtocol: grpc }
+    - { name: otlp-http, port: 4318, targetPort: 4318, protocol: TCP }
   configMap:
     content: |
       discovery.kubernetes "pods" {
@@ -33,7 +39,7 @@ alloy:
         // Só os namespaces dos projetos: fora a infra da plataforma.
         rule {
           source_labels = ["__meta_kubernetes_namespace"]
-          regex         = "kube-.*|monitoring|argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|default|tooling|local-path-storage"
+          regex         = "kube-.*|monitoring|argocd|argo-rollouts|cert-manager|cnpg-system|opentelemetry-operator-system|kyverno|auth|default|tooling|local-path-storage"
           action        = "drop"
         }
         rule {
@@ -79,5 +85,30 @@ alloy:
       loki.write "default" {
         endpoint {
           url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // --- Traces: apps → Tempo -------------------------------------------
+      otelcol.receiver.otlp "apps" {
+        grpc { endpoint = "0.0.0.0:4317" }
+        http { endpoint = "0.0.0.0:4318" }
+        output { traces = [otelcol.processor.memory_limiter.default.input] }
+      }
+
+      // Recusa (o agente tenta de novo) antes de estourar o limite do pod.
+      otelcol.processor.memory_limiter "default" {
+        check_interval = "1s"
+        limit          = "160MiB"
+        output { traces = [otelcol.processor.batch.default.input] }
+      }
+
+      otelcol.processor.batch "default" {
+        output { traces = [otelcol.exporter.otlp.tempo.input] }
+      }
+
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.monitoring.svc.cluster.local:4317"
+          tls { insecure = true }
         }
       }

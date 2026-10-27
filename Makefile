@@ -6,7 +6,7 @@
         logos \
         verify-image \
         notifications notifications-webhooks notify-test \
-        data db-status db-backup db-restore db-restore-test db-psql \
+        data db-status db-backup db-restore db-restore-test db-psql tracing \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -215,6 +215,9 @@ seal: ## Gera os SealedSecrets (commitáveis) de um projeto. Uso: make seal PROJ
 
 data: ## Instala/atualiza o operador do Postgres (CloudNativePG), o backup e o storage S3 (cluster existente)
 	@./scripts/setup-data.sh
+
+tracing: ## Instala/atualiza o tracing: Tempo + OpenTelemetry Operator (cluster existente; depois make observability)
+	@./scripts/setup-tracing.sh
 
 postgres: ## Recria o Postgres VAZIO (apaga os dados; backups antigos ficam no S3). Uso: make postgres PROJECT=<p> ENV=<e>
 	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then \

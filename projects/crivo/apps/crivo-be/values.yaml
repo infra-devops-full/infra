@@ -41,3 +41,9 @@ envFrom:
   - secretRef: postgres     # DATABASE_URL, DIRECT_URL  (database no project.yaml)
   - secretRef: redis        # REDIS_URL                 (redis no project.yaml)
   - secretRef: app-secrets  # JWT_SECRET, STRIPE_*, ... (secrets/<env>.env)
+
+# Traces no Tempo: o OpenTelemetry Operator injeta o agente (Node.js) no pod,
+# sem mudar o código. docs/22-tracing.md
+tracing:
+  enabled: true
+  language: nodejs

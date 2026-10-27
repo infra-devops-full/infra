@@ -482,6 +482,7 @@ make seal PROJECT=<p> [ENV=<e>]                # gera os SealedSecrets (commitá
 make sealed-secrets                            # controller + backup/restauração da chave
 make postgres PROJECT=<p> ENV=<e>         # recria o banco VAZIO
 make data                                      # operador do Postgres + backup + storage S3
+make tracing                                   # Tempo + OpenTelemetry Operator
 make db-status | db-backup | db-restore-test | db-psql PROJECT=<p> ENV=<e>
 make db-restore PROJECT=<p> ENV=<e> [TIME="2026-10-26 14:29:00-03"]   # volta o banco (PITR)
 make apply-argocd         # reaplica argocd/ + k8s/
@@ -569,6 +570,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── setup-sealed-secrets.sh   # controller do Sealed Secrets + backup da chave
 │   ├── seal-secrets.sh           # secrets/<env>.env → sealed/<env>/*.yaml
 │   ├── setup-data.sh             # operador do Postgres + backup (S3 fora do cluster)
+│   ├── setup-tracing.sh          # Tempo + OpenTelemetry Operator
 │   ├── setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh
 │   ├── db.sh                     # make db-* (status, backup, restore)
 │   ├── setup-observability.sh    # métricas do Ingress + Loki + Alloy
@@ -888,3 +890,19 @@ make db-restore      PROJECT=crivo ENV=prod TIME="2026-10-26 14:29:00-03"
 ```
 
 Detalhes: [docs/21-banco-de-dados.md](docs/21-banco-de-dados.md).
+
+## 21. Tracing distribuído (OpenTelemetry + Tempo)
+
+Com duas linhas nos values, o **OpenTelemetry Operator** injeta o agente
+(Java ou Node.js) no pod, sem mudar o código do app. Cada requisição vira um
+trace que atravessa os serviços (HTTP, SQL, RabbitMQ) até o **Tempo**, que
+também gera o mapa de quem chama quem. No Grafana: *Platform / Apps → Traces*
+e *Explore → Tempo*, com links do trace para os logs e as métricas.
+
+```yaml
+tracing:
+  enabled: true
+  language: java      # ou nodejs
+```
+
+Detalhes: [docs/22-tracing.md](docs/22-tracing.md).

@@ -217,6 +217,10 @@ bash "$SCRIPT_DIR/scripts/setup-delivery.sh"
 # antes dos projetos: cada banco nasce restaurando o último backup, se houver.
 bash "$SCRIPT_DIR/scripts/setup-data.sh"
 
+# Tracing: Tempo + OpenTelemetry Operator (agentes injetados nos apps com
+# tracing.enabled). O Alloy da observabilidade já recebe os spans.
+bash "$SCRIPT_DIR/scripts/setup-tracing.sh"
+
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=grafana \
   --namespace=monitoring --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."

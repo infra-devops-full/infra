@@ -114,6 +114,21 @@ autoscaling:
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
 
+# Tracing (OpenTelemetry), sem mudar o código do app: o operador da
+# plataforma injeta o agente da linguagem no pod e os spans vão para o Tempo.
+# docs/22-tracing.md
+#   tracing:
+#     enabled: true
+#     language: java      # java (Spring...) | nodejs (NestJS, Express...)
+tracing:
+  enabled: false
+  language: ""
+  instrumentation: monitoring/platform   # k8s/otel-instrumentation.yaml
+  # Java: o operador escreve JAVA_TOOL_OPTIONS no pod, o que apagaria o da
+  # imagem (templates/spring-maven/Dockerfile). Repetindo aqui, ele só
+  # acrescenta o -javaagent. Ajuste se a imagem do app usar outro valor.
+  javaToolOptions: "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+
 # env: map (chave: valor). Conversão para lista é feita no template.
 # Use ${ENV} em strings para referenciar app.environment via tpl render.
 env: {}

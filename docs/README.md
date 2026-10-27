@@ -17,6 +17,7 @@ material de estudo e treino.
 | [07-scripts.md](07-scripts.md) | o que cada script e cada comando do Makefile faz, e como se encadeiam |
 | [08-troubleshooting.md](08-troubleshooting.md) | problemas reais que já aconteceram, com causa e solução |
 | [09-cheatsheet.md](09-cheatsheet.md) | comandos `make`, `kubectl` e `git` do dia a dia |
+| [22-tracing.md](22-tracing.md) | tracing com OpenTelemetry (agentes injetados pelo operador, sem mudar código) e Tempo: ligar num app, mapa de serviços, TraceQL, trace ↔ logs ↔ métricas |
 | [21-banco-de-dados.md](21-banco-de-dados.md) | Postgres com CloudNativePG: réplica e failover, backup contínuo num S3 fora do cluster, restauração para um horário (PITR), teste de restauração, alertas |
 | [20-notificacoes.md](20-notificacoes.md) | alertas e deploys no Discord: canais, mensagens, configurar, testar |
 | [19-assinatura-de-imagem.md](19-assinatura-de-imagem.md) | cosign keyless no CI, SBOM atestado, Kyverno verificando a assinatura, `make verify-image` |
