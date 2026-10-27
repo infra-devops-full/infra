@@ -85,4 +85,18 @@ CHECK_KINDS=true
 # Server-side apply: sem a annotation last-applied-configuration (limite de
 # 256 KB), que os dashboards grandes do Grafana estourariam.
 render | kubectl apply --server-side --field-manager=devops-platform --force-conflicts -f -
+
+# Cluster novo: os ApplicationSets de apps e de segredos geram tudo na hora,
+# antes de o platform-projects criar os AppProjects ("application references
+# project <p> which does not exist"), e o controller só tenta de novo minutos
+# depois. Espera os AppProjects e pede a regeneração.
+EXPECTED="$(project_names | sort | xargs)"
+for _ in $(seq 1 60); do
+  HAVE="$(kubectl get appprojects -n argocd -o name 2>/dev/null | sed 's#.*/##' | grep -vxE 'default|platform' | sort | xargs)"
+  [[ "$HAVE" == "$EXPECTED" ]] && break
+  sleep 3
+done
+for a in $(kubectl get applicationsets -n argocd -o name 2>/dev/null); do
+  kubectl -n argocd annotate "$a" argocd.argoproj.io/application-set-refresh=true --overwrite >/dev/null
+done
 echo "✅ Plataforma aplicada (argocd/ + k8s/)"

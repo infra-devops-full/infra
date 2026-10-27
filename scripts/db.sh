@@ -139,6 +139,10 @@ EOF
       sleep 2
     done
     step "Restaurando $SERVER${TARGET_TIME:+ até $TARGET_TIME} numa cópia ($T)"
+    RECOVERY_TARGET=""
+    if [[ -n "$TARGET_TIME" ]]; then
+      RECOVERY_TARGET="$(printf '\n      recoveryTarget: { targetTime: "%s" }' "$TARGET_TIME")"
+    fi
     START=$(date +%s)
     kubectl apply -f - >/dev/null <<EOF
 apiVersion: postgresql.cnpg.io/v1
@@ -153,7 +157,7 @@ spec:
     limits: { memory: 512Mi }
   bootstrap:
     recovery:
-      source: origem$( [[ -n "$TARGET_TIME" ]] && printf '\n      recoveryTarget: { targetTime: "%s" }' "$TARGET_TIME")
+      source: origem${RECOVERY_TARGET}
   externalClusters:
     - name: origem
       plugin:

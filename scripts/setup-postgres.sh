@@ -136,6 +136,13 @@ else
   if ! $FRESH && [[ -n "$FROM" ]]; then MODE="restauração"; else MODE="vazio"; FROM=""; fi
 fi
 
+# Restaurar até um instante (PITR). Um `if`, não `$([[ ]] && ...)` dentro da
+# atribuição: com set -e, o teste falso ali encerrava o script em silêncio.
+RECOVERY_TARGET=""
+if [[ -n "$TARGET_TIME" ]]; then
+  RECOVERY_TARGET="$(printf '\n      recoveryTarget: { targetTime: "%s" }' "$TARGET_TIME")"
+fi
+
 case "$MODE" in
   restauração)
     echo "  ♻️  restaurando $NS do backup $FROM${TARGET_TIME:+ até $TARGET_TIME}"
@@ -144,7 +151,7 @@ case "$MODE" in
       source: origem
       database: ${DB_NAME}
       owner: ${DB_USER}
-      secret: { name: postgres-credentials }$( [[ -n "$TARGET_TIME" ]] && printf '\n      recoveryTarget: { targetTime: "%s" }' "$TARGET_TIME")
+      secret: { name: postgres-credentials }${RECOVERY_TARGET}
   externalClusters:
     - name: origem
       plugin:
