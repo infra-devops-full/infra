@@ -34,6 +34,8 @@ resources:
 
 # $(VAR) é expandido pelo Kubernetes com as chaves dos Secrets do envFrom.
 env:
+  # Perfil do Spring = ambiente (develop, prod): application-<env>.yaml do app.
+  SPRING_PROFILES_ACTIVE: "{{ .Values.app.environment }}"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/catalogdb"
   SPRING_DATASOURCE_USERNAME: "$(DB_USER)"
   SPRING_DATASOURCE_PASSWORD: "$(DB_PASSWORD)"
@@ -41,7 +43,6 @@ env:
   SPRING_RABBITMQ_PORT: "$(RABBITMQ_PORT)"
   SPRING_RABBITMQ_USERNAME: "$(RABBITMQ_USER)"
   SPRING_RABBITMQ_PASSWORD: "$(RABBITMQ_PASSWORD)"
-  SPRING_JPA_SHOW_SQL: "false"
   # trace_id/span_id (o agente OpenTelemetry põe no MDC) em cada linha de log:
   # no Grafana a linha vira link para o trace. docs/22-tracing.md
   LOGGING_PATTERN_LEVEL: "%5p [trace_id=%X{trace_id:-} span_id=%X{span_id:-}]"

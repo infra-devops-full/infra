@@ -33,6 +33,8 @@ resources:
 # $(VAR) é expandido pelo Kubernetes com as chaves dos Secrets do envFrom.
 # O banco pricingdb é um extraDbs do mesmo Postgres do projeto.
 env:
+  # Perfil do Spring = ambiente (develop, prod): application-<env>.yaml do app.
+  SPRING_PROFILES_ACTIVE: "{{ .Values.app.environment }}"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/pricingdb"
   SPRING_DATASOURCE_USERNAME: "$(DB_USER)"
   SPRING_DATASOURCE_PASSWORD: "$(DB_PASSWORD)"
