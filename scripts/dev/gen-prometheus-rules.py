@@ -1,5 +1,5 @@
 import sys
-INFRA='argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default'
+INFRA='argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default'
 def labels(expr, ns):
     # project = namespace sem o último "-<env>" (ou o namespace inteiro), env = sufixo
     return (f'label_replace(label_replace(label_replace({expr}, '
@@ -153,4 +153,68 @@ w(f'''        - record: app:request_duration_seconds:p95_5m
             summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}} {{{{ $labels.app }}}}: canary pausado há 1h"
             description: "O Rollout {{{{ $labels.exported_namespace }}}}/{{{{ $labels.name }}}} está pausado esperando promoção (make promote) ou aborto (make abort)."
             runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/15-entrega-progressiva.md#rolloutstuckpaused''')
+
+# Postgres (CloudNativePG): métricas dos PodMonitors criados por setup-postgres.sh.
+def pg(expr):
+    return labels(f'label_replace({expr}, "app", "postgres", "", "")', 'namespace')
+RUNBOOK='https://github.com/infra-devops-full/infra/blob/main/docs/21-banco-de-dados.md'
+w(f'''
+    - name: platform-apps.postgres
+      rules:
+        - alert: PostgresDown
+          # Há disco de banco (PVC postgres-N) mas nenhuma instância respondendo.
+          expr: >-
+            {pg('count by (namespace) (kube_persistentvolumeclaim_info{persistentvolumeclaim=~"postgres-[0-9]+"}) unless on (namespace) count by (namespace) (cnpg_collector_up == 1)')}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}}: Postgres fora do ar"
+            description: "Nenhuma instância do Postgres de {{{{ $labels.namespace }}}} responde há 5 min. Os apps estão sem banco."
+            runbook_url: {RUNBOOK}#postgresdown
+        - alert: PostgresWALArchiveFailing
+          # WAL esperando para ir ao S3: a restauração para um horário (PITR)
+          # para no último arquivo enviado.
+          expr: >-
+            {pg('max by (namespace) (cnpg_collector_pg_wal_archive_status{value="ready"}) > 3')}
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}}: WAL do Postgres não está indo para o backup"
+            description: "{{{{ $value }}}} arquivos de WAL acumulados em {{{{ $labels.namespace }}}} há 15 min. O que for escrito agora não tem backup."
+            runbook_url: {RUNBOOK}#postgreswalarchivefailing
+        - alert: PostgresBackupTooOld
+          # O backup base é diário; 30h = um dia perdido + folga.
+          expr: >-
+            {pg('time() - max by (namespace) (barman_cloud_cloudnative_pg_io_last_available_backup_timestamp) > 30 * 3600')}
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}}: Postgres sem backup base recente"
+            description: "O último backup base de {{{{ $labels.namespace }}}} tem {{{{ $value | humanizeDuration }}}}. Restaurar vai reaplicar muito WAL (ou falhar)."
+            runbook_url: {RUNBOOK}#postgresbackuptooold
+        - alert: PostgresReplicaMissing
+          # Mais de uma instância, mas menos réplicas recebendo WAL do que deveria:
+          # um failover agora perderia dados ou não teria para onde ir.
+          expr: >-
+            {pg('max by (namespace) (cnpg_pg_replication_streaming_replicas) < on (namespace) (count by (namespace) (cnpg_collector_up) - 1)')}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}}: réplica do Postgres fora de sincronia"
+            description: "Só {{{{ $value }}}} réplica(s) recebendo WAL do primário em {{{{ $labels.namespace }}}} há 10 min."
+            runbook_url: {RUNBOOK}#postgresreplicamissing
+        - alert: PostgresReplicationLag
+          expr: >-
+            {pg('max by (namespace) (cnpg_pg_replication_lag) > 300')}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{{{ $labels.project }}}}/{{{{ $labels.env }}}}: réplica do Postgres atrasada"
+            description: "A réplica de {{{{ $labels.namespace }}}} está {{{{ $value | humanizeDuration }}}} atrás do primário."
+            runbook_url: {RUNBOOK}#postgresreplicationlag''')
 print('\n'.join(out))

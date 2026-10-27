@@ -238,6 +238,29 @@ elif kubectl version >/dev/null 2>&1; then
   else warn "Argo Rollouts não instalado"; hint "make delivery"; fi
 fi
 
+# --- Banco de dados ----------------------------------------------------------
+section "Banco de dados (CloudNativePG + backup)"
+if kubectl get deploy -n cnpg-system cnpg-cloudnative-pg >/dev/null 2>&1; then
+  ok "CloudNativePG instalado"
+  BACKUP_C="$(kubectl config current-context 2>/dev/null)"; BACKUP_C="${BACKUP_C#k3d-}-backup"
+  if [[ "$(docker inspect -f '{{.State.Running}}' "$BACKUP_C" 2>/dev/null)" == true ]]; then
+    ok "storage de backup no ar ($BACKUP_C, fora do cluster)"
+  else
+    err "storage de backup ($BACKUP_C) parado ou ausente — WAL e backups falhando"; hint "make data"
+  fi
+  while read -r NS PHASE; do
+    [[ -z "$NS" ]] && continue
+    if [[ "$PHASE" == "Cluster in healthy state" ]]; then ok "$NS: Postgres saudável"
+    else warn "$NS: Postgres — $PHASE"; hint "make db-status PROJECT=${NS%-*} ENV=${NS##*-}"; fi
+  done < <(kubectl get clusters.postgresql.cnpg.io -A -o jsonpath='{range .items[?(@.metadata.name=="postgres")]}{.metadata.namespace} {.status.phase}{"\n"}{end}' 2>/dev/null)
+  OLD="$(kubectl get deploy -A -o jsonpath='{range .items[?(@.metadata.name=="postgres")]}{.metadata.namespace} {end}' 2>/dev/null)"
+  [[ -n "$OLD" ]] && { warn "Postgres antigo (Deployment com emptyDir) em: $OLD"; hint "make project-apply PROJECT=<p> (migra para o CloudNativePG; dados do emptyDir se perdem)"; }
+elif kubectl version >/dev/null 2>&1; then
+  if grep -qs "^database:" "$INFRA_ROOT"/projects/*/project.yaml; then
+    err "há projetos com database:, mas o CloudNativePG não está instalado"; hint "make data"
+  fi
+fi
+
 # --- Login único --------------------------------------------------------------
 section "Login único (SSO)"
 if [[ -f "$INFRA_ROOT/config/auth/github-oauth.sealed.yaml" ]]; then

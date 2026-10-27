@@ -34,6 +34,9 @@ database:                 # Postgres por ambiente → Secret `postgres`
   user: app               # SENHAS NÃO VÃO AQUI: `make seal` gera e sela
   defaultDb: app
   extraDbs: [outro_db]    # um banco por serviço, no mesmo Postgres
+  instances: { prod: 2 }  # opcional (padrão: prod 2 = primário + réplica, outros 1)
+  storage: 1Gi            # opcional: disco de cada instância
+  backupRetention: 7d     # opcional: janela de restauração (docs/21-banco-de-dados.md)
 
 redis:                    # → Secret `redis` (com senha gerada)
   enabled: true
@@ -107,7 +110,7 @@ por app. Veja [15-entrega-progressiva.md](15-entrega-progressiva.md).
 | **um app** | `apps/<app>/values.yaml` + um `values-<env>.yaml` por ambiente → item no `APPS_JSON` do workflow do app → commit/push dos dois repos |
 | **um ambiente** (ex.: `staging`) | `values-staging.yaml` em cada app → `make seal PROJECT=<p> ENV=staging` → commit → `make project-apply` (cria o namespace e as dependências) → no workflow, mapear a branch para `DEPLOY_ENV=staging` |
 | **um microfrontend** | mesmo host do shell + `ingress.path` == `basePath` (veja abaixo) |
-| **um banco para um serviço novo** | `extraDbs` no `project.yaml` → `make postgres PROJECT=<p> ENV=<e>` (recria o Postgres; dados de lab se perdem) |
+| **um banco para um serviço novo** | `extraDbs` no `project.yaml` → `make project-apply PROJECT=<p>` (cria só o banco novo; os outros não mudam) |
 
 ## Microfrontends (Next.js Multi-Zones)
 

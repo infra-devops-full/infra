@@ -22,6 +22,10 @@ appRepo: https://github.com/crivo-sync/crivo
 database:
   user: crivo
   defaultDb: crivo
+  # 1 instância também em prod: o Docker desta máquina (16 GB) não aguenta
+  # réplica em todos os bancos. Com folga, 2 = failover automático.
+  instances:
+    prod: 1
 
 # Redis por ambiente (BullMQ) → Secret `redis` (REDIS_URL, REDIS_HOST, ...).
 redis:

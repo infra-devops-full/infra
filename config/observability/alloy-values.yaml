@@ -33,7 +33,7 @@ alloy:
         // Só os namespaces dos projetos: fora a infra da plataforma.
         rule {
           source_labels = ["__meta_kubernetes_namespace"]
-          regex         = "kube-.*|monitoring|argocd|argo-rollouts|cert-manager|kyverno|auth|default|tooling|local-path-storage"
+          regex         = "kube-.*|monitoring|argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|default|tooling|local-path-storage"
           action        = "drop"
         }
         rule {

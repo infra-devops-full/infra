@@ -6,6 +6,7 @@
         logos \
         verify-image \
         notifications notifications-webhooks notify-test \
+        data db-status db-backup db-restore db-restore-test db-psql \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -212,12 +213,32 @@ seal: ## Gera os SealedSecrets (commitáveis) de um projeto. Uso: make seal PROJ
 	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make seal PROJECT=<p> [ENV=<e>]$(RESET)"; exit 1; fi
 	@./scripts/seal-secrets.sh $(PROJECT) $(ENV)
 
-postgres: ## Recria o Postgres de um projeto/ambiente (dados de lab se perdem). Uso: make postgres PROJECT=<p> ENV=<e>
+data: ## Instala/atualiza o operador do Postgres (CloudNativePG), o backup e o storage S3 (cluster existente)
+	@./scripts/setup-data.sh
+
+postgres: ## Recria o Postgres VAZIO (apaga os dados; backups antigos ficam no S3). Uso: make postgres PROJECT=<p> ENV=<e>
 	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then \
 		echo "$(YELLOW)⚠️  Uso: make postgres PROJECT=<p> ENV=develop$(RESET)"; exit 1; \
 	fi
-	@./scripts/setup-postgres.sh --namespace $(PROJECT)-$(ENV) --reset \
-		--extra-dbs "$$(yq -r '.database.extraDbs // [] | join(" ")' projects/$(PROJECT)/project.yaml)"
+	@read -r -p "Apagar os dados de $(PROJECT)-$(ENV)? Digite o namespace: " a && [ "$$a" = "$(PROJECT)-$(ENV)" ] || { echo "Cancelado."; exit 1; }
+	@bash -c 'source scripts/lib-project.sh; ./scripts/setup-postgres.sh --namespace $(PROJECT)-$(ENV) --reset --fresh \
+		--extra-dbs "$$(project_db_extras $(PROJECT))" --instances "$$(project_db_instances $(PROJECT) $(ENV))" \
+		--storage "$$(project_db_storage $(PROJECT))" --retention "$$(project_db_retention $(PROJECT))"'
+
+db-status: ## Postgres de um projeto: instâncias, primário, backups e janela de restauração. Uso: make db-status PROJECT=<p> ENV=<e>
+	@./scripts/db.sh status "$(PROJECT)" "$(ENV)"
+
+db-backup: ## Backup base agora (além do diário). Uso: make db-backup PROJECT=<p> ENV=<e>
+	@./scripts/db.sh backup "$(PROJECT)" "$(ENV)"
+
+db-restore: ## RECRIA o banco a partir do backup. Uso: make db-restore PROJECT=<p> ENV=<e> [TIME="2026-10-26 14:30:00-03"]
+	@./scripts/db.sh restore "$(PROJECT)" "$(ENV)" "$(TIME)" "$(FROM)"
+
+db-restore-test: ## Testa o backup: restaura numa cópia, compara com o banco em uso e apaga. Uso: make db-restore-test PROJECT=<p> ENV=<e> [TIME=...] [KEEP=1]
+	@./scripts/db.sh restore-test "$(PROJECT)" "$(ENV)" "$(TIME)"
+
+db-psql: ## psql no primário. Uso: make db-psql PROJECT=<p> ENV=<e> [DB=<banco>]
+	@./scripts/db.sh psql "$(PROJECT)" "$(ENV)" "$(DB)"
 
 project-apply: ## Prepara UM projeto no cluster (deps, secrets) + /etc/hosts. Uso: make project-apply PROJECT=<p>
 	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make project-apply PROJECT=<nome>$(RESET)"; exit 1; fi

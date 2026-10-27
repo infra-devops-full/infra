@@ -1,0 +1,23 @@
+# =============================================================================
+# Operador do Postgres (CloudNativePG). Instalado por setup-data.sh (make data).
+# Cada projeto com `database:` no project.yaml ganha um Cluster por ambiente
+# (setup-postgres.sh). docs/21-banco-de-dados.md
+# =============================================================================
+resources:
+  requests: { cpu: 20m, memory: 64Mi }
+  limits:   { memory: 256Mi }
+
+monitoring:
+  # O PodMonitor de cada banco é criado por setup-postgres.sh (o
+  # enablePodMonitor do Cluster está depreciado). Aqui: as métricas do
+  # próprio operador e o dashboard oficial na pasta Infra do Grafana.
+  podMonitorEnabled: true
+  podMonitorAdditionalLabels:
+    release: kube-prometheus-stack
+  grafanaDashboard:
+    create: true
+    namespace: monitoring
+    labels:
+      grafana_dashboard: "1"
+    annotations:
+      grafana_folder: "Infra"

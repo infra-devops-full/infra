@@ -1,0 +1,9 @@
+# =============================================================================
+# Plugin de backup do CloudNativePG (Barman Cloud → S3). Instalado por
+# setup-data.sh. Ele injeta um sidecar em cada pod de banco, que manda o WAL
+# (contínuo) e os backups base para o ObjectStore do namespace.
+# Precisa do cert-manager (certificados do gRPC entre operador e plugin).
+# =============================================================================
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits:   { memory: 128Mi }

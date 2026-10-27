@@ -24,31 +24,31 @@ spec:
       rules:
         - record: app:requests:rate5m
           expr: >-
-            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:request_errors:ratio_rate5m
           expr: >-
-            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[5m])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[5m])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:requests:rate30m
           expr: >-
-            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[30m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[30m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:request_errors:ratio_rate30m
           expr: >-
-            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[30m])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[30m])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[30m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[30m])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[30m])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[30m])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:requests:rate1h
           expr: >-
-            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[1h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[1h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:request_errors:ratio_rate1h
           expr: >-
-            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[1h])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[1h])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[1h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[1h])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[1h])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[1h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:requests:rate6h
           expr: >-
-            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[6h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace(sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[6h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:request_errors:ratio_rate6h
           expr: >-
-            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[6h])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[6h])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[6h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace((sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default",status=~"5.."}[6h])) or sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[6h])) * 0) / sum by (exported_namespace, ingress) (rate(nginx_ingress_controller_requests{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[6h])), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         - record: app:request_duration_seconds:p95_5m
           expr: >-
-            label_replace(label_replace(label_replace(label_replace(histogram_quantile(0.95, sum by (le, exported_namespace, ingress) (rate(nginx_ingress_controller_request_duration_seconds_bucket{exported_namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m]))), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace(histogram_quantile(0.95, sum by (le, exported_namespace, ingress) (rate(nginx_ingress_controller_request_duration_seconds_bucket{exported_namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"}[5m]))), "app", "$1", "ingress", "(.*)"), "project", "$1", "exported_namespace", "(.*)"), "project", "$1", "exported_namespace", "(.+)-[^-]+"), "env", "$1", "exported_namespace", ".+-([^-]+)")
         # SLO como métrica: o Grafana e as regras leem daqui.
         - record: app:slo:objective
           expr: vector(0.995)
@@ -100,7 +100,7 @@ spec:
           # Deployment que deveria ter réplica e não tem nenhuma pronta
           # (inclui as dependências: postgres, redis, rabbitmq).
           expr: >-
-            label_replace(label_replace(label_replace(label_replace(kube_deployment_spec_replicas{namespace!~"argocd|argo-rollouts|cert-manager|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"} > 0 and on (namespace, deployment) kube_deployment_status_replicas_available == 0, "app", "$1", "deployment", "(.*)"), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
+            label_replace(label_replace(label_replace(label_replace(kube_deployment_spec_replicas{namespace!~"argocd|argo-rollouts|cert-manager|cnpg-system|kyverno|auth|monitoring|kube-system|kube-public|kube-node-lease|default"} > 0 and on (namespace, deployment) kube_deployment_status_replicas_available == 0, "app", "$1", "deployment", "(.*)"), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
           for: 5m
           labels:
             severity: critical
@@ -157,3 +157,62 @@ spec:
             summary: "{{ $labels.project }}/{{ $labels.env }} {{ $labels.app }}: canary pausado há 1h"
             description: "O Rollout {{ $labels.exported_namespace }}/{{ $labels.name }} está pausado esperando promoção (make promote) ou aborto (make abort)."
             runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/15-entrega-progressiva.md#rolloutstuckpaused
+
+    - name: platform-apps.postgres
+      rules:
+        - alert: PostgresDown
+          # Há disco de banco (PVC postgres-N) mas nenhuma instância respondendo.
+          expr: >-
+            label_replace(label_replace(label_replace(label_replace(count by (namespace) (kube_persistentvolumeclaim_info{persistentvolumeclaim=~"postgres-[0-9]+"}) unless on (namespace) count by (namespace) (cnpg_collector_up == 1), "app", "postgres", "", ""), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.project }}/{{ $labels.env }}: Postgres fora do ar"
+            description: "Nenhuma instância do Postgres de {{ $labels.namespace }} responde há 5 min. Os apps estão sem banco."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/21-banco-de-dados.md#postgresdown
+        - alert: PostgresWALArchiveFailing
+          # WAL esperando para ir ao S3: a restauração para um horário (PITR)
+          # para no último arquivo enviado.
+          expr: >-
+            label_replace(label_replace(label_replace(label_replace(max by (namespace) (cnpg_collector_pg_wal_archive_status{value="ready"}) > 3, "app", "postgres", "", ""), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.project }}/{{ $labels.env }}: WAL do Postgres não está indo para o backup"
+            description: "{{ $value }} arquivos de WAL acumulados em {{ $labels.namespace }} há 15 min. O que for escrito agora não tem backup."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/21-banco-de-dados.md#postgreswalarchivefailing
+        - alert: PostgresBackupTooOld
+          # O backup base é diário; 30h = um dia perdido + folga.
+          expr: >-
+            label_replace(label_replace(label_replace(label_replace(time() - max by (namespace) (barman_cloud_cloudnative_pg_io_last_available_backup_timestamp) > 30 * 3600, "app", "postgres", "", ""), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.project }}/{{ $labels.env }}: Postgres sem backup base recente"
+            description: "O último backup base de {{ $labels.namespace }} tem {{ $value | humanizeDuration }}. Restaurar vai reaplicar muito WAL (ou falhar)."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/21-banco-de-dados.md#postgresbackuptooold
+        - alert: PostgresReplicaMissing
+          # Mais de uma instância, mas menos réplicas recebendo WAL do que deveria:
+          # um failover agora perderia dados ou não teria para onde ir.
+          expr: >-
+            label_replace(label_replace(label_replace(label_replace(max by (namespace) (cnpg_pg_replication_streaming_replicas) < on (namespace) (count by (namespace) (cnpg_collector_up) - 1), "app", "postgres", "", ""), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.project }}/{{ $labels.env }}: réplica do Postgres fora de sincronia"
+            description: "Só {{ $value }} réplica(s) recebendo WAL do primário em {{ $labels.namespace }} há 10 min."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/21-banco-de-dados.md#postgresreplicamissing
+        - alert: PostgresReplicationLag
+          expr: >-
+            label_replace(label_replace(label_replace(label_replace(max by (namespace) (cnpg_pg_replication_lag) > 300, "app", "postgres", "", ""), "project", "$1", "namespace", "(.*)"), "project", "$1", "namespace", "(.+)-[^-]+"), "env", "$1", "namespace", ".+-([^-]+)")
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.project }}/{{ $labels.env }}: réplica do Postgres atrasada"
+            description: "A réplica de {{ $labels.namespace }} está {{ $value | humanizeDuration }} atrás do primário."
+            runbook_url: https://github.com/infra-devops-full/infra/blob/main/docs/21-banco-de-dados.md#postgresreplicationlag

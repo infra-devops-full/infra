@@ -113,6 +113,14 @@ project_db_enabled()  { [[ "$(_pq "$1" '.database != null')" == "true" ]]; }
 project_db_user()     { _pq "$1" '.database.user // "postgres"'; }
 project_db_default()  { _pq "$1" '.database.defaultDb // "app"'; }
 project_db_extras()   { _pq "$1" '.database.extraDbs // [] | join(" ")'; }
+# Instâncias do Postgres no ambiente: database.instances.<env>; padrão 2 em
+# prod (primário + réplica, failover automático) e 1 nos outros.
+project_db_instances() {
+  local d=1; [[ "$2" == prod ]] && d=2
+  _pq "$1" ".database.instances.\"$2\" // $d"
+}
+project_db_storage()   { _pq "$1" '.database.storage // "1Gi"'; }
+project_db_retention() { _pq "$1" '.database.backupRetention // "7d"'; }
 
 project_redis_enabled()  { [[ "$(_pq "$1" '.redis.enabled // false')" == "true" ]]; }
 

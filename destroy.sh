@@ -98,6 +98,9 @@ else
     
     # Deletar cluster
     echo -e "${RED}🗑️  Deletando cluster k3d...${NC}"
+    # O storage de backup (fora do cluster) sai da rede do k3d, senão a rede
+    # não é apagada. Container e volume ficam: o próximo setup restaura dali.
+    docker network disconnect "k3d-$CLUSTER_NAME" "${CLUSTER_NAME}-backup" >/dev/null 2>&1 || true
     k3d cluster delete "$CLUSTER_NAME"
     
     if [ $? -eq 0 ]; then
@@ -157,6 +160,10 @@ fi
 SEALED_KEYS_DIR="$(eval echo "${SEALED_KEYS_DIR:-$HOME/.config/devops-platform/sealed-secrets}")"
 if [ -f "$SEALED_KEYS_DIR/keys.yaml" ]; then
     echo -e "${BLUE}🔑 Chave do Sealed Secrets preservada em $SEALED_KEYS_DIR (restaurada no próximo make setup)${NC}"
+fi
+if docker container inspect "${CLUSTER_NAME}-backup" >/dev/null 2>&1; then
+    echo -e "${BLUE}🐘 Backups dos bancos preservados no container ${CLUSTER_NAME}-backup (volume Docker ${CLUSTER_NAME}-backup): o próximo make setup restaura os dados${NC}"
+    echo -e "${BLUE}   Para apagar de vez: docker rm -f ${CLUSTER_NAME}-backup && docker volume rm ${CLUSTER_NAME}-backup${NC}"
 fi
 PLATFORM_CA_DIR="$(eval echo "${PLATFORM_CA_DIR:-$HOME/.config/devops-platform/ca}")"
 if [ -f "$PLATFORM_CA_DIR/platform-ca-secret.yaml" ]; then

@@ -35,6 +35,10 @@ database:
   defaultDb: catalogdb
   extraDbs:
     - pricingdb
+  # 1 instância também em prod: o Docker desta máquina (16 GB) não aguenta
+  # réplica em todos os bancos. Com folga, 2 = failover automático.
+  instances:
+    prod: 1
 
 # RabbitMQ por ambiente → Secret `rabbitmq` (RABBITMQ_HOST, RABBITMQ_PORT,
 # RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_URL).

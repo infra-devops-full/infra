@@ -24,7 +24,11 @@ make security                      # cert-manager + CA local, Kyverno e polític
 make trust-ca | untrust-ca         # navegador confia (ou não) na CA local (sudo)
 make policy-check                  # políticas × todos os apps, sem cluster
 make delivery                      # Argo Rollouts + análise padrão
-make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
+make data                          # operador do Postgres + backup + storage S3
+make db-status PROJECT=<p> ENV=<e> # instâncias, backups, janela de restauração
+make db-backup | db-restore-test | db-psql PROJECT=<p> ENV=<e>
+make db-restore PROJECT=<p> ENV=<e> [TIME="2026-10-26 14:29:00-03"]   # recria do backup (PITR)
+make postgres PROJECT=<p> ENV=<e>  # recria VAZIO
 make ghcr NAMESPACES="ns1 ns2" [TOKEN=...]
 ```
 

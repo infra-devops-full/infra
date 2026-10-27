@@ -480,7 +480,10 @@ make projects             # projetos, apps e ambientes descobertos
 make project-apply PROJECT=<p>                 # deps + secrets + hosts de um projeto
 make seal PROJECT=<p> [ENV=<e>]                # gera os SealedSecrets (commitáveis)
 make sealed-secrets                            # controller + backup/restauração da chave
-make postgres PROJECT=<p> ENV=<e> [RESET_DATA=1]
+make postgres PROJECT=<p> ENV=<e>         # recria o banco VAZIO
+make data                                      # operador do Postgres + backup + storage S3
+make db-status | db-backup | db-restore-test | db-psql PROJECT=<p> ENV=<e>
+make db-restore PROJECT=<p> ENV=<e> [TIME="2026-10-26 14:29:00-03"]   # volta o banco (PITR)
 make apply-argocd         # reaplica argocd/ + k8s/
 make render-platform      # mostra argocd/ + k8s/ renderizados
 make hosts                # regrava o bloco do /etc/hosts
@@ -565,7 +568,9 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── apply-platform.sh         # argocd/ + k8s/
 │   ├── setup-sealed-secrets.sh   # controller do Sealed Secrets + backup da chave
 │   ├── seal-secrets.sh           # secrets/<env>.env → sealed/<env>/*.yaml
+│   ├── setup-data.sh             # operador do Postgres + backup (S3 fora do cluster)
 │   ├── setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh
+│   ├── db.sh                     # make db-* (status, backup, restore)
 │   ├── setup-observability.sh    # métricas do Ingress + Loki + Alloy
 │   ├── hosts.sh                  # bloco isolado no /etc/hosts
 │   ├── doctor.sh                 # confere tokens, variáveis, GitHub e Docker
@@ -603,7 +608,9 @@ make destroy
 ```
 
 Remove o cluster, o bloco do `/etc/hosts` e o contexto do kubeconfig. Antes de
-apagar o `DATA_DIR`, ele pergunta.
+apagar o `DATA_DIR`, ele pergunta. Ficam, para o próximo `make setup`: a chave
+do Sealed Secrets, a CA local e os **backups dos bancos** (container e volume
+`<cluster>-backup`), de onde os bancos são restaurados.
 
 ## 9. CPU e memória
 
@@ -629,6 +636,10 @@ O que você ajusta na sua máquina:
    `make start`. Os dados de `DATA_DIR` são mantidos.
 4. Mudou o `K3D_AGENTS`? O número de nodes só muda recriando o cluster:
    `make destroy && make setup`.
+5. **Disco da VM do Docker**: com menos de ~15% livre, o k3s fica lento e
+   pode reiniciar sozinho (docs/08-troubleshooting.md). Veja com
+   `docker system df`; o cache de build de outros projetos costuma ser o
+   maior (`docker builder prune`).
 
 Para ver o consumo:
 
@@ -861,3 +872,19 @@ make notifications && make notify-test
 ```
 
 Detalhes: [docs/20-notificacoes.md](docs/20-notificacoes.md).
+
+## 20. Banco de dados (Postgres com backup)
+
+Cada projeto com `database:` ganha, por ambiente, um Postgres do
+**CloudNativePG** em disco persistente (prod: primário + réplica com failover
+automático). O WAL vai continuamente, e um backup base todo dia, para um S3
+num container **fora do cluster**: um `make destroy && make setup` volta com
+os dados, e dá para restaurar o banco para um minuto exato (PITR).
+
+```bash
+make db-status       PROJECT=crivo ENV=prod
+make db-restore-test PROJECT=crivo ENV=prod                # prova que o backup volta
+make db-restore      PROJECT=crivo ENV=prod TIME="2026-10-26 14:29:00-03"
+```
+
+Detalhes: [docs/21-banco-de-dados.md](docs/21-banco-de-dados.md).

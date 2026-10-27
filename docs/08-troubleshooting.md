@@ -42,13 +42,15 @@ treinar o diagnóstico, veja [11-treino-quebre-e-conserte.md](11-treino-quebre-e
 | `*.local` não resolve | cache mDNS do macOS ou bloco ausente | `make hosts`, ou `curl --resolve host:80:127.0.0.1` |
 | app de microfrontend responde 404 | `ingress.path` ≠ `basePath`, ou falta o app em `projects/` | conferir os dois valores |
 | Docker com CPU alta | muitos nodes k3d, ou Kubernetes do Docker Desktop ligado | `K3D_AGENTS=1`; desligar o k8s do Docker Desktop |
+| node `server-0` reiniciando sozinho (`docker ps`: *Up 1 minute*), API com `TLS handshake timeout`; `docker logs k3d-<cluster>-server-0`: `Slow SQL` e `level=fatal msg="Transaction commit failed"` | o k3s guarda o estado num SQLite; com CPU saturada ou disco lento/cheio, a compactação estoura o tempo e o k3s encerra. Cada queda gera mais carga (tudo ressincroniza) e vira ciclo | aliviar: `docker system df` (cache de build e imagens sem uso costumam passar de 20 GB: `docker builder prune`, `docker image prune`), menos réplicas (`database.instances.prod: 1`); dar mais memória/disco ao Docker Desktop |
 
 ## Banco e logs
 
 | Sintoma | Causa | Solução |
 | ------- | ----- | ------- |
 | `FATAL: database "<user>" does not exist` a cada 5 s no Postgres | `pg_isready` sem `-d` testa um banco com o nome do usuário | o script atual usa `-d <defaultDb>` (recriar com `make postgres`) |
-| tabelas sumiram | Postgres com `emptyDir` foi recriado | `make rollout SERVICE=<api> NAMESPACE=<ns>` para as migrations rodarem de novo |
+| criar vários bancos de uma vez deixa o cluster lento | cada Cluster novo faz initdb, backup base e (prod) cópia para a réplica, e os apps reiniciam sem banco | aplicar um projeto por vez (`make project-apply`); esperar `make db-status` saudável |
+| tabelas sumiram | (antigo) Postgres com `emptyDir` recriado; hoje o banco tem PVC e backup | `make db-restore PROJECT=<p> ENV=<e> [TIME=...]` (docs/21-banco-de-dados.md) |
 | erro de compilação MapStruct `Unmapped target property: "withX"` | método `withX(...)` no record é lido como setter fluente | `@Mapping(target = "withX", ignore = true)` |
 
 ## Segredos (Sealed Secrets)

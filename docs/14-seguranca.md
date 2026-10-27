@@ -81,6 +81,7 @@ põe) recebe do Kyverno (`k8s/kyverno-network-baseline.yaml`):
 | `allow-same-namespace` | pods do mesmo `<projeto>-<env>` (app → banco, front → API) |
 | `allow-from-ingress-nginx` | o NGINX Ingress (tráfego de fora) |
 | `allow-from-monitoring` | o Prometheus (métricas dos apps) |
+| `allow-from-cnpg-operator` | o operador do Postgres, só na porta 8000 dos pods de banco ([21-banco-de-dados.md](21-banco-de-dados.md)) |
 
 ```
 crivo-develop ──✗──► wlstore-prod        outro projeto: bloqueado

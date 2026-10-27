@@ -15,6 +15,7 @@ make setup
        ├─ (argocd — dentro do setup.sh)
        ├─ setup-observability.sh          Prometheus/Alertmanager/Grafana, métricas, Loki, Alloy
        ├─ setup-delivery.sh               Argo Rollouts (canary)
+       ├─ setup-data.sh                   CloudNativePG + backup (S3 fora do cluster)
        ├─ setup-sealed-secrets.sh         controller + restaura/backup da chave
        ├─ apply-project.sh  (por projeto)
        │    ├─ kubectl apply sealed/<env>/  (SealedSecrets → Secrets)
@@ -41,7 +42,9 @@ lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts 
 | `policy-check.sh` | testar as políticas do Kyverno contra todos os apps renderizados, sem cluster | `make policy-check` |
 | `setup-sealed-secrets.sh` | instalar o controller do Sealed Secrets e fazer backup/restauração da chave | `make sealed-secrets` |
 | `seal-secrets.sh` | `secrets/<env>.env` → `sealed/<env>/*.yaml` (gera senhas de infra que faltarem) | `make seal` |
-| `setup-postgres.sh` | Postgres num namespace, com credenciais do Secret `postgres` | `make postgres` |
+| `setup-data.sh` | storage de backup (S3 num container fora do cluster), operador CloudNativePG e plugin de backup | `make data` |
+| `setup-postgres.sh` | Postgres de um namespace (Cluster do CloudNativePG, backups, bancos extras); restaura do backup se houver | `make postgres`, via `apply-project.sh` |
+| `db.sh` | status, backup, restauração (PITR), teste de restauração e psql | `make db-*` |
 | `setup-redis.sh` / `setup-rabbitmq.sh` | Redis e RabbitMQ, com credenciais dos Secrets `redis`/`rabbitmq` | via `apply-project.sh` |
 | `hosts.sh` | bloco isolado no `/etc/hosts` (só mexe entre os marcadores) | `make hosts` |
 | `github-bootstrap.sh` | branch develop, deploy key, proteção da main, CodeQL, Dependabot | `make github` |
@@ -77,7 +80,7 @@ Todos são **idempotentes**: rodar de novo não quebra nada, só reconcilia.
 
 | Aqui (script) | Em produção, costuma virar |
 | ------------- | -------------------------- |
-| `setup-postgres.sh` | banco gerenciado (RDS/Cloud SQL) ou operador (CloudNativePG) |
+| `setup-postgres.sh` (CloudNativePG) | o mesmo operador num cluster gerenciado, ou banco gerenciado (RDS/Cloud SQL) |
 | `seal-secrets.sh` (Sealed Secrets) | External Secrets + Vault/AWS Secrets Manager |
 | criação do cluster no `setup.sh` | Terraform/OpenTofu |
 | `hosts.sh` | DNS real (Route53, Cloudflare) + external-dns |

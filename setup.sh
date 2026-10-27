@@ -213,6 +213,10 @@ bash "$SCRIPT_DIR/scripts/setup-observability.sh"
 # ServiceMonitor do kube-prometheus-stack.
 bash "$SCRIPT_DIR/scripts/setup-delivery.sh"
 
+# Postgres gerenciado (CloudNativePG) + backup num S3 fora do cluster. Vem
+# antes dos projetos: cada banco nasce restaurando o último backup, se houver.
+bash "$SCRIPT_DIR/scripts/setup-data.sh"
+
 kubectl wait --for=condition=ready pod \
   --selector=app.kubernetes.io/name=grafana \
   --namespace=monitoring --timeout=300s 2>/dev/null || echo "Grafana ainda inicializando..."

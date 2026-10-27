@@ -687,6 +687,65 @@ kubectl -n treino get ingress          # repare no demo-demo-canary
 
 ---
 
+## Exercício 20: o `DELETE` sem `WHERE` (backup e PITR)
+
+Este usa um banco de verdade: o do **crivo-develop** (develop pode quebrar).
+Crie uma tabela, anote a hora e "erre":
+
+```bash
+make db-psql PROJECT=crivo ENV=develop
+```
+
+```sql
+create table treino_pedidos (id serial primary key, item text);
+insert into treino_pedidos (item) select 'pedido-' || g from generate_series(1, 500) g;
+select now();                           -- ANOTE esta hora
+select pg_sleep(60);                    -- espere 1 min
+delete from treino_pedidos;             -- o erro
+select pg_switch_wal();                 -- fecha o WAL (senão ele vai em até 5 min)
+\q
+```
+
+**Sintoma observado:** `select count(*) from treino_pedidos` dá `0`. O app
+não reclama de nada: o banco está "saudável", só sem os dados.
+
+<details><summary>Dica</summary>
+
+```bash
+make db-status PROJECT=crivo ENV=develop    # a hora anotada está na janela?
+```
+</details>
+
+<details><summary>Solução e conceito</summary>
+
+1. Primeiro sem mexer no banco em uso: restaure uma **cópia** até a hora
+   anotada e confira que as 500 linhas estão lá:
+
+   ```bash
+   make db-restore-test PROJECT=crivo ENV=develop TIME="<hora anotada>" KEEP=1
+   kubectl exec -n crivo-develop postgres-restore-test-1 -c postgres -- \
+     psql -d crivo -c "select count(*) from treino_pedidos"     # 500
+   kubectl delete cluster postgres-restore-test -n crivo-develop
+   ```
+
+2. Depois o banco inteiro (os apps ficam ~2 min sem banco):
+
+   ```bash
+   make db-restore PROJECT=crivo ENV=develop TIME="<hora anotada>"
+   ```
+
+- **PITR**: o backup base mais recente + o WAL reaplicado até o instante
+  pedido. Sem o WAL contínuo, só daria para voltar ao backup da madrugada.
+- O passo 1 é o que se faz em produção quando o resto do banco precisa
+  continuar: copia-se da restauração só o que foi perdido.
+- Repare no `serverName` em `make db-status` antes e depois: o banco
+  restaurado grava backups num caminho novo, sem misturar com o de origem.
+- **Limpeza:** `drop table treino_pedidos;` (ou deixe: develop).
+- Mais em [21-banco-de-dados.md](21-banco-de-dados.md).
+</details>
+
+---
+
 ## Desafio final: o incidente misterioso
 
 Peça para alguém (ou faça você, sem olhar) aplicar **duas** quebras ao mesmo
@@ -718,3 +777,4 @@ Esse formato (sintoma → evidência → causa → correção → prevenção) �
 | timeout entre namespaces, mas o Ingress responde | NetworkPolicy (default-deny) | `kubectl get networkpolicy -n <ns>` |
 | `denied the request` / `violates PodSecurity` no apply | política de admissão (Kyverno / Pod Security) | a própria mensagem; `make policies` |
 | Rollout `Degraded` / `RolloutAborted` | a análise reprovou o canary ou ele não ficou pronto | `make rollouts`, `kubectl get analysisrun` |
+| dados sumiram, banco "saudável" | erro humano (`DELETE`, migration ruim) | `make db-status` (janela) → `make db-restore-test TIME=... KEEP=1` |

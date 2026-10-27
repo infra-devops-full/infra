@@ -105,7 +105,10 @@ for NS in $NAMESPACES; do
   if project_db_enabled "$PROJ"; then
     step "Postgres em $NS"
     bash "$SCRIPT_DIR/setup-postgres.sh" --namespace "$NS" \
-      --extra-dbs "$(project_db_extras "$PROJ")"
+      --extra-dbs "$(project_db_extras "$PROJ")" \
+      --instances "$(project_db_instances "$PROJ" "${NS#"$PROJ"-}")" \
+      --storage "$(project_db_storage "$PROJ")" \
+      --retention "$(project_db_retention "$PROJ")"
   fi
   if project_redis_enabled "$PROJ"; then
     step "Redis em $NS"
