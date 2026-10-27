@@ -1,0 +1,16 @@
+# Copie para terraform.tfvars (fora do Git) e ajuste. Nada de segredo aqui:
+# tokens vão em variáveis de ambiente (veja versions.tf).
+
+name   = "devops-platform"
+region = "nyc3"
+
+node_size = "s-4vcpu-8gb"
+node_min  = 2
+node_max  = 3
+
+# Seu IP público (curl -s ifconfig.me) e o do CI, se ele for usar kubectl.
+api_allowed_cidrs = ["203.0.113.10/32"]
+
+# Opcional: domínio delegado à DigitalOcean (ns1/ns2/ns3.digitalocean.com).
+# domain     = "devops.exemplo.com.br"
+# ingress_ip = ""   # segundo apply, depois de instalar o NGINX Ingress

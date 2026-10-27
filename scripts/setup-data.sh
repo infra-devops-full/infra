@@ -27,7 +27,7 @@ BARMAN_CHART_VERSION="0.8.1"     # plugin-barman-cloud v0.15.1
 
 step() { echo -e "\033[0;36m▸ $1\033[0m"; }
 
-step "Storage de backup ($(backup_container), fora do cluster)"
+step "Storage de backup ($(backup_where), fora do cluster)"
 backup_store_up
 
 helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null 2>&1 || true
@@ -45,4 +45,4 @@ helm upgrade --install barman-cloud cnpg/plugin-barman-cloud --version "$BARMAN_
   -f "$INFRA_ROOT/config/data/plugin-barman-cloud-values.yaml" \
   --timeout 5m --wait >/dev/null
 
-echo -e "\033[0;32m✅ Dados persistentes prontos (backups em $(backup_endpoint), volume Docker $(backup_container))\033[0m"
+echo -e "\033[0;32m✅ Dados persistentes prontos (backups: $(backup_where))\033[0m"

@@ -6,7 +6,7 @@
         logos \
         verify-image \
         notifications notifications-webhooks notify-test \
-        data db-status db-backup db-restore db-restore-test db-psql tracing \
+        data db-status db-backup db-restore db-restore-test db-psql tracing cloud cloud-check cloud-backup-env \
         sealed-secrets seal ghcr helm-lint helm-template apply-argocd render-platform postgres \
         projects project-apply doctor github observability lab-up lab-status lab-down hosts pods apps describe events rollout shell pf refresh
 
@@ -215,6 +215,17 @@ seal: ## Gera os SealedSecrets (commitáveis) de um projeto. Uso: make seal PROJ
 
 data: ## Instala/atualiza o operador do Postgres (CloudNativePG), o backup e o storage S3 (cluster existente)
 	@./scripts/setup-data.sh
+
+CLOUD ?= digitalocean
+cloud-check: ## Terraform da nuvem: fmt, validate, tflint e trivy (sem credenciais). Uso: make cloud-check [CLOUD=digitalocean]
+	@./scripts/terraform.sh check $(CLOUD)
+
+cloud: ## Terraform da nuvem (cria recursos PAGOS). Uso: make cloud TF="init|plan|apply|output" [CLOUD=digitalocean]
+	@if [ -z "$(TF)" ]; then echo "$(YELLOW)⚠️  Uso: make cloud TF=plan [CLOUD=digitalocean] (docs/23-nuvem.md)$(RESET)"; exit 1; fi
+	@./scripts/terraform.sh tf $(CLOUD) $(TF)
+
+cloud-backup-env: ## Liga os backups do cluster atual (nuvem) ao bucket do Terraform. Depois: make data
+	@./scripts/cloud-backup-env.sh $(CLOUD)
 
 tracing: ## Instala/atualiza o tracing: Tempo + OpenTelemetry Operator (cluster existente; depois make observability)
 	@./scripts/setup-tracing.sh

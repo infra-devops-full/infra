@@ -1,0 +1,10 @@
+# Estado e variáveis locais: contêm IDs, IPs e segredos (chaves geradas).
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+backend.tf
+.terraform/
+crash.log
+*.tfplan
+# O lock dos providers (.terraform.lock.hcl) VAI para o Git: versões exatas.

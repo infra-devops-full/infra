@@ -483,6 +483,7 @@ make sealed-secrets                            # controller + backup/restauraç�
 make postgres PROJECT=<p> ENV=<e>         # recria o banco VAZIO
 make data                                      # operador do Postgres + backup + storage S3
 make tracing                                   # Tempo + OpenTelemetry Operator
+make cloud-check | cloud TF=plan               # Terraform da nuvem (docs/23-nuvem.md)
 make db-status | db-backup | db-restore-test | db-psql PROJECT=<p> ENV=<e>
 make db-restore PROJECT=<p> ENV=<e> [TIME="2026-10-26 14:29:00-03"]   # volta o banco (PITR)
 make apply-argocd         # reaplica argocd/ + k8s/
@@ -571,6 +572,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   ├── seal-secrets.sh           # secrets/<env>.env → sealed/<env>/*.yaml
 │   ├── setup-data.sh             # operador do Postgres + backup (S3 fora do cluster)
 │   ├── setup-tracing.sh          # Tempo + OpenTelemetry Operator
+│   ├── terraform.sh              # make cloud / cloud-check
 │   ├── setup-postgres.sh / setup-redis.sh / setup-rabbitmq.sh
 │   ├── db.sh                     # make db-* (status, backup, restore)
 │   ├── setup-observability.sh    # métricas do Ingress + Loki + Alloy
@@ -580,6 +582,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=50
 │   └── 99-show-urls.sh
 ├── create-ghcr-secrets.sh
 ├── templates/                    # nestjs/, nextjs/, nx-nextjs/, spring-maven/, github/{deploy,dependabot}.yml
+├── terraform/                    # nuvem: digitalocean/ (VPC, DOKS, Spaces, DNS) — docs/23-nuvem.md
 ├── docs/                         # documentação por tema, treino (labs/) e histórico (legacy/)
 └── projects/
     ├── crivo/
@@ -906,3 +909,20 @@ tracing:
 ```
 
 Detalhes: [docs/22-tracing.md](docs/22-tracing.md).
+
+## 22. Nuvem (Terraform na DigitalOcean)
+
+`terraform/digitalocean/` cria a camada de baixo para a plataforma na nuvem:
+VPC, Kubernetes gerenciado (DOKS) com autoscaling e firewall da API, bucket
+de backups no Spaces (versionado, chave restrita) e DNS. O CI valida o código
+com `terraform validate`, tflint e trivy (análise de segurança), sem
+credenciais. O apply é manual, porque gera custo (~US$ 115/mês).
+
+```bash
+make cloud-check                     # valida, sem custo
+make cloud TF=plan                   # com DIGITALOCEAN_TOKEN e chave do Spaces
+make cloud-backup-env                # backups dos bancos → bucket do Spaces
+```
+
+Passo a passo, custos e os guias para AWS e VPS:
+[docs/23-nuvem.md](docs/23-nuvem.md).

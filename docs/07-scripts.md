@@ -45,6 +45,8 @@ lib-project.sh  ← usado por quase todos: "quais projetos/apps/ambientes/hosts 
 | `seal-secrets.sh` | `secrets/<env>.env` → `sealed/<env>/*.yaml` (gera senhas de infra que faltarem) | `make seal` |
 | `setup-data.sh` | storage de backup (S3 num container fora do cluster), operador CloudNativePG e plugin de backup | `make data` |
 | `setup-tracing.sh` | Tempo (traces + métricas geradas) e OpenTelemetry Operator (agentes injetados) | `make tracing` |
+| `terraform.sh` | Terraform da nuvem (local ou em Docker): `check` = fmt + validate + tflint + trivy | `make cloud-check`, `make cloud TF=...` |
+| `cloud-backup-env.sh` | outputs do Terraform → config de backup do cluster da nuvem | `make cloud-backup-env` |
 | `setup-postgres.sh` | Postgres de um namespace (Cluster do CloudNativePG, backups, bancos extras); restaura do backup se houver | `make postgres`, via `apply-project.sh` |
 | `db.sh` | status, backup, restauração (PITR), teste de restauração e psql | `make db-*` |
 | `setup-redis.sh` / `setup-rabbitmq.sh` | Redis e RabbitMQ, com credenciais dos Secrets `redis`/`rabbitmq` | via `apply-project.sh` |
@@ -84,7 +86,7 @@ Todos são **idempotentes**: rodar de novo não quebra nada, só reconcilia.
 | ------------- | -------------------------- |
 | `setup-postgres.sh` (CloudNativePG) | o mesmo operador num cluster gerenciado, ou banco gerenciado (RDS/Cloud SQL) |
 | `seal-secrets.sh` (Sealed Secrets) | External Secrets + Vault/AWS Secrets Manager |
-| criação do cluster no `setup.sh` | Terraform/OpenTofu |
+| criação do cluster no `setup.sh` | Terraform/OpenTofu (`terraform/digitalocean/`, [23-nuvem.md](23-nuvem.md)) |
 | `hosts.sh` | DNS real (Route53, Cloudflare) + external-dns |
 | `github-bootstrap.sh` | Terraform provider do GitHub |
 

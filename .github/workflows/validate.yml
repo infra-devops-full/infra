@@ -8,6 +8,7 @@
 #   políticas     todo app renderizado passa nas políticas do Kyverno
 #   shellcheck    scripts da plataforma
 #   actionlint    templates de workflow entregues aos repos dos apps
+#   terraform     fmt + validate + tflint + trivy (segurança) de cada nuvem em terraform/
 # =============================================================================
 name: validate
 
@@ -57,3 +58,9 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color \
             templates/github/deploy.yml templates/github/release.yml .github/workflows/validate.yml
+
+      # Sem credenciais: valida sintaxe, boas práticas e segurança. O apply
+      # é manual (docs/23-nuvem.md): infraestrutura que cobra não sobe sozinha.
+      - name: Terraform (nuvem)
+        run: |
+          for d in terraform/*/; do ./scripts/terraform.sh check "$(basename "$d")"; done

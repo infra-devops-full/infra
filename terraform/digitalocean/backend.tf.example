@@ -1,0 +1,34 @@
+# Estado remoto no Spaces (S3). Copie para backend.tf e rode
+# `terraform init -migrate-state`.
+#
+# O bucket de estado é criado UMA vez, à mão, fora deste Terraform (ele não
+# pode guardar o próprio estado antes de existir):
+#   doctl spaces bucket create <nome>-tfstate --region nyc3   (ou pelo painel)
+# Deixe-o privado e com versionamento ligado: o estado contém segredos
+# (a chave de backup, por exemplo).
+#
+# Credenciais: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY = a sua chave do
+# Spaces (o backend "s3" usa os nomes da AWS).
+terraform {
+  backend "s3" {
+    bucket = "devops-platform-tfstate"
+    key    = "digitalocean/terraform.tfstate"
+    region = "us-east-1" # ignorado pelo Spaces, mas obrigatório
+
+    endpoints = {
+      s3 = "https://nyc3.digitaloceanspaces.com"
+    }
+
+    # O Spaces não é a AWS: pula as validações específicas dela.
+    skip_credentials_validation = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_s3_checksum            = true
+    use_path_style              = false
+
+    # Trava (lockfile no próprio bucket): dois applies ao mesmo tempo não
+    # corrompem o estado.
+    use_lockfile = true
+  }
+}

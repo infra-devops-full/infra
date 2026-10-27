@@ -68,7 +68,7 @@ case "$CMD" in
       .status.serverRecoveryWindow // {} | to_entries[] |
       "  " + .key + ":  de " + (.value.firstRecoverabilityPoint // "?") + "  até agora   (último backup base " + (.value.lastSuccessfulBackupTime // "?") + ")"'
     echo "  serverName em uso: $(kubectl get cluster postgres -n "$NS" -o jsonpath='{.spec.plugins[0].parameters.serverName}')"
-    echo "  no S3 ($(backup_container)): $(backup_servers "$NS" | xargs)"
+    echo "  no S3 ($(backup_where)): $(backup_servers "$NS" | xargs)"
     ;;
 
   backup)
