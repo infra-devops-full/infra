@@ -23,9 +23,15 @@ readinessProbe:
 
 # Lidas em runtime pelo servidor Next (Server Actions): a imagem é a mesma em
 # todos os ambientes. O backend é chamado pela rede interna do namespace.
+# Todas obrigatórias: faltou uma, o servidor não sobe (src/config/env.ts do
+# wlstore-fe). Lista completa: .env.example do wlstore-fe.
 env:
   CATALOG_API_URL: "http://catalog-service:8081"
   PRICING_API_URL: "http://pricing-service:8082"
+  # Tenant da loja enquanto não há login (depois vem da sessão). Para um
+  # tenant diferente por ambiente, sobrescreva em values-<env>.yaml.
+  TENANT_ID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+  NEXT_TELEMETRY_DISABLED: "1"
 
 resources:
   limits:
