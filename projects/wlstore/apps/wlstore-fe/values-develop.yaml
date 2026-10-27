@@ -1,6 +1,6 @@
 # image.tag: atualizado pelo CI do app a cada push na branch develop.
 # "develop" é a tag móvel do primeiro build; o CI troca pela tag sha-<commit>.
 image:
-  tag: sha-43c43b9
+  tag: sha-adb1e31
 ingress:
   host: develop.wlstore.local # domínio único do projeto: o front responde em /
