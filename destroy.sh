@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# DevOps Lab Ninja - Destruir Ambiente
+# DevOps Lab - Destruir Ambiente
 # ========================================
-# Remove completamente o Lab Ninja local:
+# Remove completamente o DevOps Lab local:
 # - Deleta cluster k3d
 # - Remove entradas do /etc/hosts
 # - Limpa contexto do kubeconfig
@@ -26,13 +26,14 @@ DATA_DIR="$(eval echo "$DATA_DIR")"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║    _   _                    ____ _                 _ _    ║
-║   | \ | | _____  _____    / ___| | ___  _   _  __| | |   ║
-║   |  \| |/ _ \ \/ / _ \  | |   | |/ _ \| | | |/ _` | |   ║
-║   | |\  |  __/>  < (_) | | |___| | (_) | |_| | (_| | |__ ║
-║   |_| \_|\___/_/\_\___/   \____|_|\___/ \__,_|\__,_|____|║
+║     ____              ___                                 ║
+║    |  _ \  _____   __/ _ \ _ __  ___                      ║
+║    | | | |/ _ \ \ / / | | | '_ \/ __|                     ║
+║    | |_| |  __/\ V /| |_| | |_) \__ \                     ║
+║    |____/ \___| \_/  \___/| .__/|___/                     ║
+║                           |_|                             ║
 ║                                                           ║
-║   🥷 Destroy Lab Ninja                              ║
+║   Destruir o DevOps Lab                                   ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF

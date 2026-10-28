@@ -92,7 +92,9 @@ render | kubectl apply --server-side --field-manager=devops-platform --force-con
 # depois. Espera os AppProjects e pede a regeneração.
 EXPECTED="$(project_names | sort | xargs)"
 for _ in $(seq 1 60); do
-  HAVE="$(kubectl get appprojects -n argocd -o name 2>/dev/null | sed 's#.*/##' | grep -vxE 'default|platform' | sort | xargs)"
+  # `|| true`: sem AppProject de projeto ainda, o grep não acha nada e sai
+  # com 1 — com pipefail, isso encerraria o script em silêncio.
+  HAVE="$(kubectl get appprojects -n argocd -o name 2>/dev/null | sed 's#.*/##' | { grep -vxE 'default|platform' || true; } | sort | xargs)"
   [[ "$HAVE" == "$EXPECTED" ]] && break
   sleep 3
 done

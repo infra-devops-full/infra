@@ -151,9 +151,12 @@ do Argo Rollouts aparece só a imagem (`:1.4.0`) de cada *Revision*.
 | **Rollback** (numa Revision) | troca o pod template para a revisão antiga | **não**: o selfHeal do ArgoCD reaplica a versão do Git e começa outro canary. Use `make rollback` |
 | Restart | recria os pods (mesma versão) | sim |
 
-Hoje o dashboard é **somente leitura** (não tem login): os botões aparecem,
-mas a ação é recusada. Com o login único (próxima fase), ele passa a exigir
-login e as ações ficam liberadas para quem tem permissão.
+Sem o login único, o dashboard é **somente leitura**: os botões aparecem,
+mas a ação falha com "Error rolling back" / "An unexpected error occurred"
+(a conta do dashboard só pode ler). Com o login único (`make sso`,
+[18-login-sso.md](18-login-sso.md)), ele exige login de admin e as ações
+ficam liberadas. Mesmo assim, para **voltar versão**, use `make rollback`:
+o botão Rollback é desfeito pelo ArgoCD (tabela acima).
 
 ## Arquivos
 

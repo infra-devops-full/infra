@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# DevOps Lab Ninja - Status do Ambiente
+# DevOps Lab - Status do Ambiente
 # =========================================
-# Verifica o status de todos os componentes do Lab Ninja
+# Verifica o status de todos os componentes do DevOps Lab
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
