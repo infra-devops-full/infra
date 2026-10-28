@@ -16,7 +16,6 @@
 github:
   orgs:
     - infra-devops-full
-    - crivo-sync
     - whitelabel-store
 
 admins:

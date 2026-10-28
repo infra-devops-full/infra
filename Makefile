@@ -53,7 +53,7 @@ status: ## Mostra status completo do cluster e projetos
 	@chmod +x status.sh
 	@./status.sh
 
-logs: ## Logs de um app. Uso: make logs SERVICE=products NAMESPACE=nest-rabbitmq-develop
+logs: ## Logs de um app. Uso: make logs SERVICE=catalog-service NAMESPACE=wlstore-develop
 	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ]; then \
 		echo "$(YELLOW)⚠️  Uso: make logs SERVICE=<app> NAMESPACE=<projeto>-<env>$(RESET)"; exit 1; \
 	fi
@@ -99,11 +99,11 @@ shell: ## Abre um shell no container de um app. Uso: make shell SERVICE=<app> NA
 
 pf: ## Port-forward de um Service p/ localhost. Uso: make pf SERVICE=<svc> NAMESPACE=<ns> PORT=<porta> [LOCAL=<porta>]
 	@if [ -z "$(SERVICE)" ] || [ -z "$(NAMESPACE)" ] || [ -z "$(PORT)" ]; then \
-		echo "$(YELLOW)⚠️  Uso: make pf SERVICE=postgres NAMESPACE=crivo-develop PORT=5432 [LOCAL=5433]$(RESET)"; exit 1; \
+		echo "$(YELLOW)⚠️  Uso: make pf SERVICE=postgres NAMESPACE=wlstore-develop PORT=5432 [LOCAL=5433]$(RESET)"; exit 1; \
 	fi
 	@kubectl port-forward -n $(NAMESPACE) svc/$(SERVICE) $(or $(LOCAL),$(PORT)):$(PORT)
 
-refresh: ## Força o ArgoCD a reler o Git agora. Uso: make refresh [APP=crivo-be-develop] (sem APP = todos)
+refresh: ## Força o ArgoCD a reler o Git agora. Uso: make refresh [APP=wlstore-fe-develop] (sem APP = todos)
 	@if [ -n "$(APP)" ]; then \
 		kubectl -n argocd annotate application $(APP) argocd.argoproj.io/refresh=hard --overwrite; \
 	else \

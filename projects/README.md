@@ -30,9 +30,7 @@ projects/<projeto>/                  # nome da pasta = nome do projeto
 
 | Projeto | Mostra |
 | ------- | ------ |
-| [`crivo/`](crivo) | dois apps (API + front), Postgres, Redis, `app-secrets`, front chamando a API pelo Service interno |
-| [`nest-rabbitmq/`](nest-rabbitmq) | um app e RabbitMQ |
-| [`wlstore/`](wlstore) | microsserviços Spring (um banco por serviço via `extraDbs`, eventos pelo RabbitMQ, variáveis do Spring montadas com `$(VAR)`) e microfrontends Next em Nx (`catalog-mfe` em `/catalog` e `pricing-mfe` em `/pricing`, no mesmo host do `shell`) |
+| [`wlstore/`](wlstore) | microsserviços Spring (um banco por serviço via `extraDbs`, eventos pelo RabbitMQ, variáveis do Spring montadas com `$(VAR)`) e um front Next.js (`wlstore-fe`) com canary em prod |
 
 ## Checklist de um projeto novo
 
