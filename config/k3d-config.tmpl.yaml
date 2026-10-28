@@ -38,6 +38,13 @@ options:
     disableLoadbalancer: false
   k3s:
     extraArgs:
+      # Banco do cluster: etcd embutido em vez do SQLite padrão do k3s. Com
+      # dezenas de controllers (ArgoCD, Kyverno, CNPG, Prometheus...) o SQLite
+      # vira gargalo ("Slow SQL" nos logs): a renovação dos leases atrasa, o
+      # node fica NotReady, pods são despejados e recriados, e a CPU explode.
+      - arg: --cluster-init
+        nodeFilters:
+          - server:0
       - arg: --disable=traefik
         nodeFilters:
           - server:*

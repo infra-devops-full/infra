@@ -827,7 +827,7 @@ gera o changelog, publica a **mesma imagem** testada em develop como `:1.4.0`
 e põe essa versão em prod (com canary).
 
 ```bash
-make release  PROJECT=crivo                       # ou Actions → release → Run workflow
+make release  PROJECT=crivo                       # ou Actions → 🏷️ Release em prod → Run workflow
 make rollback PROJECT=crivo ENV=prod [APP=<app>]  # volta pelo Git; imediato em prod
 make abort    SERVICE=<app> NAMESPACE=<ns>        # durante o canary: volta na hora
 ```

@@ -19,7 +19,7 @@ PR: test+build    push: test +   merge: só      versão 1.4.0 com a mesma
 
 ### Uma execução por mudança
 
-| Evento | `build-and-deploy` | CodeQL |
+| Evento | `🚀 Build & Deploy` (deploy.yml) | CodeQL |
 | ------ | ------------------ | ------ |
 | PR feature → develop | test + build (valida) | — |
 | push/merge na develop | test + build + deploy em develop | — |

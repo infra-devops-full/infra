@@ -141,7 +141,7 @@ policies: ## Violações das políticas do Kyverno nos projetos (PolicyReports)
 policy-check: ## Testa as políticas do Kyverno contra todos os apps renderizados (sem cluster)
 	@./scripts/policy-check.sh
 
-release: ## Publica uma versão em prod (Actions → release). Uso: make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto|patch|minor|major] [VERSION=X.Y.Z]
+release: ## Publica uma versão em prod (Actions → 🏷️ Release em prod). Uso: make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto|patch|minor|major] [VERSION=X.Y.Z]
 	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make release PROJECT=<p> [REPO=owner/repo] [BUMP=auto] [VERSION=X.Y.Z]$(RESET)"; exit 1; fi
 	@REPOS="$$(bash -c 'source scripts/lib-project.sh; project_app_repos $(PROJECT)' | sed -E 's#https://github.com/##; s#\.git$$##')"; \
 	REPO="$(REPO)"; \

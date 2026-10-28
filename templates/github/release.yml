@@ -3,7 +3,7 @@
 # <repo-do-app>/.github/workflows/release.yml (sem nada para ajustar: lê
 # INFRA_* e APPS_JSON do deploy.yml do mesmo repo).
 #
-# Como usar: Actions → release → Run workflow (branch main) → bump
+# Como usar: Actions → 🏷️ Release em prod → Run workflow (branch main) → bump
 #   auto   pelos commits desde a última versão (Conventional Commits):
 #          "feat!:"/"BREAKING CHANGE" → major · "feat:" → minor · resto → patch
 #   patch | minor | major   força o tipo
@@ -21,7 +21,11 @@
 #
 # Voltar uma versão: make rollback PROJECT=<p> ENV=prod (repo de infra).
 # =============================================================================
-name: release
+name: 🏷️ Release em prod
+run-name: >-
+  ${{ inputs.version != ''
+      && format('🏷️ Release v{0} → prod · por {1}', inputs.version, github.actor)
+      || format('🏷️ Release ({0}) → prod · por {1}', inputs.bump, github.actor) }}
 
 on:
   workflow_dispatch:
@@ -47,6 +51,7 @@ permissions:
 
 jobs:
   release:
+    name: 🏷️ Versão, changelog e deploy
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     env:
@@ -194,7 +199,7 @@ jobs:
               print(f"{a['app']}: {src} → :{os.environ['VERSION']} (assinada, {digest[:19]})")
           if missing:
               raise SystemExit("::error::sem imagem buildada para o código atual de: " + ", ".join(missing)
-                               + ". Rode o build-and-deploy na develop (ou Run workflow) e tente de novo.")
+                               + ". Rode o 🚀 Build & Deploy na develop (ou Run workflow) e tente de novo.")
           PY
 
       - name: Tag + GitHub Release

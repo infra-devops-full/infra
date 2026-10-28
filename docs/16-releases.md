@@ -5,7 +5,7 @@
 ```
 feature/x ──PR──► develop ──PR──► main ──release──► prod
    │                 │              │                 │
-PR: test+build    push: test +   merge: só      Actions → release → Run workflow
+PR: test+build    push: test +   merge: só      Actions → 🏷️ Release em prod → Run workflow
 (validação)       build + deploy  CodeQL         (ou make release PROJECT=<p>)
                   em develop     (candidato)      v1.4.0 · changelog · canary
 ```
@@ -26,7 +26,7 @@ make release PROJECT=crivo BUMP=minor          # força o tipo
 make release PROJECT=wlstore REPO=whitelabel-store/wlstore-fe   # projeto com vários repos
 ```
 
-Ou no GitHub: **Actions → release → Run workflow** (branch `main`).
+Ou no GitHub: **Actions → 🏷️ Release em prod → Run workflow** (branch `main`).
 
 O que o workflow faz (`templates/github/release.yml`):
 
@@ -55,7 +55,7 @@ Um repo = uma versão para todos os apps dele (no crivo, `crivo-be` e
 
 ### Hotfix
 
-Actions → **build-and-deploy** → Run workflow na branch `main`: builda e
+Actions → **🚀 Build & Deploy** → Run workflow na branch `main`: builda e
 faz deploy direto em prod com a tag `sha-<commit>`. É a porta de emergência;
 depois, traga a correção para a develop.
 
@@ -124,7 +124,7 @@ main → `make release` (sai uma versão nova, sem a div).
 
 | Ambiente | Recebe | Gatilho | Tag da imagem |
 | -------- | ------ | ------- | ------------- |
-| develop | cada push na `develop` | automático (build-and-deploy) | `sha-<commit>` |
+| develop | cada push na `develop` | automático (🚀 Build & Deploy) | `sha-<commit>` |
 | prod | só versões | **release** (botão ou `make release`) | `1.4.0` (a mesma imagem de um `sha-` já testado) |
 
 A `main` não é um ambiente: é o código aprovado, pronto para virar versão.
@@ -172,7 +172,7 @@ o botão Rollback é desfeito pelo ArgoCD (tabela acima).
 | Sintoma | Causa | Solução |
 | ------- | ----- | ------- |
 | release: `nada novo desde v1.4.0` | não houve merge develop → main desde a última versão | merge e rode de novo |
-| release: `sem imagem buildada para o código atual de: <app>` | o código do app na main nunca foi buildado (ex.: commit direto na main) | Run workflow do build-and-deploy na develop, ou faça a mudança passar pela develop |
+| release: `sem imagem buildada para o código atual de: <app>` | o código do app na main nunca foi buildado (ex.: commit direto na main) | Run workflow do 🚀 Build & Deploy na develop, ou faça a mudança passar pela develop |
 | release: `a tag vX.Y.Z já existe` | versão explícita repetida | outra versão (ou `BUMP=`) |
 | botão Rollback do ArgoCD desabilitado | auto-sync ligado | `make rollback` (commit no Git) |
 | `make rollback` em prod passou pelo canary | a versão de destino é mais antiga que as 3 últimas | esperado; ou `make promote FULL=1` |

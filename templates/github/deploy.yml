@@ -38,7 +38,18 @@
 #                     CRITICAL ou HIGH,CRITICAL = barra a imagem com CVE
 #                     corrigível nessas severidades.
 # =============================================================================
-name: build-and-deploy
+name: 🚀 Build & Deploy
+# Título de cada execução na aba Actions. (Nome do arquivo e do job `ci` NÃO
+# mudam: `make release`, a assinatura das imagens e a proteção da main
+# dependem deles.)
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+      && format('🔍 PR #{0} · {1}', github.event.pull_request.number, github.event.pull_request.title)
+  || github.event_name == 'workflow_dispatch' && github.ref_name == 'main'
+      && format('🚑 Hotfix em prod · por {0}', github.actor)
+  || github.event_name == 'workflow_dispatch'
+      && format('🔁 Rebuild manual · {0} · por {1}', github.ref_name, github.actor)
+  || format('🧪 develop · {0}', github.event.head_commit.message) }}
 
 on:
   push:
@@ -77,6 +88,7 @@ concurrency:
 jobs:
   # Decide quais apps testar/buildar a partir dos arquivos alterados.
   plan:
+    name: 📋 Apps afetados
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -143,6 +155,7 @@ jobs:
 
   # Lint + testes de cada app afetado. Bloqueia build e deploy se falhar.
   test:
+    name: 🧪 Testes · ${{ matrix.app }}
     needs: plan
     if: needs.plan.outputs.apps != ''
     runs-on: ubuntu-latest
@@ -193,6 +206,7 @@ jobs:
 
   # Imagem + scan de vulnerabilidades. Publica só em push (develop/main).
   build:
+    name: 🐳 Imagem · ${{ matrix.app }}
     needs: [plan, test]
     if: needs.plan.outputs.apps != ''
     runs-on: ubuntu-latest
@@ -332,6 +346,7 @@ jobs:
         run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$IMAGE"
 
   deploy:
+    name: 🚀 Deploy · ${{ github.ref_name == 'main' && 'prod' || 'develop' }}
     needs: [plan, test, build]
     if: >-
       always() && github.event_name != 'pull_request' &&
