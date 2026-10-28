@@ -65,6 +65,16 @@ resources:
     cpu: 10m
     memory: 64Mi
 
+# Enquanto o app sobe, só a startupProbe roda (mesmo path/porta da
+# livenessProbe): ele tem até periodSeconds × failureThreshold (5 min) para
+# responder. Sem ela, um app lento para subir (JVM + agente de tracing, CPU
+# disputada) é morto pela liveness antes de ficar pronto e reinicia em loop.
+startupProbe:
+  enabled: true
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 60
+
 livenessProbe:
   enabled: true
   path: /

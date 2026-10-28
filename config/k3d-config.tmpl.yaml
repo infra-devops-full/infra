@@ -45,6 +45,18 @@ options:
       - arg: --cluster-init
         nodeFilters:
           - server:0
+      # Um server só: eleição de líder não tem com quem disputar, mas, se a
+      # renovação do lease atrasa (CPU/disco saturados), o controller encerra
+      # o k3s inteiro ("leaderelection lost") e todos os pods do node caem.
+      - arg: --kube-controller-manager-arg=leader-elect=false
+        nodeFilters:
+          - server:*
+      - arg: --kube-scheduler-arg=leader-elect=false
+        nodeFilters:
+          - server:*
+      - arg: --kube-cloud-controller-manager-arg=leader-elect=false
+        nodeFilters:
+          - server:*
       - arg: --disable=traefik
         nodeFilters:
           - server:*

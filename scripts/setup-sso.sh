@@ -84,18 +84,30 @@ helm repo add dex https://charts.dexidp.io >/dev/null 2>&1 || true
 helm repo add oauth2-proxy https://oauth2-proxy.github.io/manifests >/dev/null 2>&1 || true
 helm repo update dex oauth2-proxy prometheus-community argo >/dev/null
 
+# Logo depois do setup, com os apps subindo, a API pode engasgar alguns
+# segundos ("Timeout: request did not complete within requested timeout") e
+# o helm desiste. Tenta de novo antes de falhar.
+retry() {
+  local i
+  for i in 1 2 3; do
+    "$@" && return 0
+    [[ $i -lt 3 ]] && { echo "  ↻ falhou (tentativa $i/3), tentando de novo em 20s..."; sleep 20; }
+  done
+  return 1
+}
+
 step "Dex $DEX_CHART_VERSION (https://$AUTH_HOST)"
-helm upgrade --install dex dex/dex --version "$DEX_CHART_VERSION" -n auth \
+retry helm upgrade --install dex dex/dex --version "$DEX_CHART_VERSION" -n auth \
   -f "$TMP/dex.json" --timeout 5m --wait >/dev/null
 # Config nova do Dex (orgs, clientes) só é lida na subida.
 kubectl -n auth rollout restart deploy/dex >/dev/null && kubectl -n auth rollout status deploy/dex --timeout=120s >/dev/null
 
 step "oauth2-proxy $OAUTH2_PROXY_CHART_VERSION (https://$OAUTH2_HOST)"
-helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy --version "$OAUTH2_PROXY_CHART_VERSION" -n auth \
+retry helm upgrade --install oauth2-proxy oauth2-proxy/oauth2-proxy --version "$OAUTH2_PROXY_CHART_VERSION" -n auth \
   -f "$TMP/oauth2-proxy.json" --timeout 5m --wait >/dev/null
 
 step "ArgoCD: login GitHub + RBAC"
-helm upgrade argocd argo/argo-cd --version "$(installed_chart_version argocd argocd)" -n argocd \
+retry helm upgrade argocd argo/argo-cd --version "$(installed_chart_version argocd argocd)" -n argocd \
   --reuse-values -f "$TMP/argocd.json" --timeout 5m --wait >/dev/null
 kubectl -n argocd rollout restart deploy/argocd-server >/dev/null
 
