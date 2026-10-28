@@ -1,6 +1,6 @@
 # image.tag: atualizado pelo CI do app a cada push na main (merge do PR develop → main).
 image:
-  tag: 1.4.0
+  tag: 1.5.0
 ingress:
   host: wlstore.local # domínio do projeto em prod: o front responde em /
 # Canary (Argo Rollouts): a versão nova recebe 20% e depois 50% dos requests,
@@ -8,5 +8,5 @@ ingress:
 rollout:
   enabled: true
 release:
-  version: 1.4.0
-  url: https://github.com/whitelabel-store/wlstore-fe/releases/tag/v1.4.0
+  version: 1.5.0
+  url: https://github.com/whitelabel-store/wlstore-fe/releases/tag/v1.5.0
