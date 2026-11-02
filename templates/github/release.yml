@@ -170,7 +170,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, subprocess
-          apps = json.load(open("/tmp/apps.json"))
+          # "deploy": false = app só testado (sem imagem): fora da release.
+          apps = [a for a in json.load(open("/tmp/apps.json")) if a.get("deploy", True)]
           base = f"{os.environ['REGISTRY']}/{os.environ['GITHUB_REPOSITORY'].lower()}"
           def run(*c):
               return subprocess.run(c, capture_output=True, text=True)

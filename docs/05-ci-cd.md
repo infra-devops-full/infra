@@ -76,6 +76,7 @@ e mudanças em `.github/workflows/`.
 | `paths` | prefixos que, alterados, afetam o app (inclua libs compartilhadas e o lockfile) |
 | `setup` | `node` (npm fixo 11.6.2), `pnpm` (10.29.3), `java` (Temurin 21 + cache Maven) ou `""` |
 | `test` | lint + testes, rodado na raiz do repo. **Valide localmente antes**: teste que já falha trava todos os deploys |
+| `deploy` | opcional. `false` = só lint + testes, sem imagem, deploy nem release: para um serviço que ainda não está na plataforma (sem pasta em `projects/<p>/apps/`) |
 
 Os testes Java usam **Testcontainers** (Postgres e RabbitMQ reais) e por isso
 rodam direto no runner, que tem Docker.

@@ -91,8 +91,10 @@ jobs:
     name: 📋 Apps afetados
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
+      matrix: ${{ steps.plan.outputs.matrix }}             # imagem + deploy
       apps: ${{ steps.plan.outputs.apps }}
+      test-matrix: ${{ steps.plan.outputs.test-matrix }}   # lint + testes
+      test-apps: ${{ steps.plan.outputs.test-apps }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -109,6 +111,8 @@ jobs:
           # setup:      toolchain dos testes: node | pnpm | java | "" (nenhuma)
           # test:       comando de lint/testes, rodado na raiz do repo
           #             ("" = sem testes; o build ainda roda)
+          # deploy:     opcional; false = só lint + testes, sem imagem nem
+          #             deploy (app ainda fora da plataforma)
           APPS_JSON: |
             [
               {
@@ -144,27 +148,34 @@ jobs:
               return changed is None or any(f.startswith(p) for f in changed for p in a["paths"])
           targets = [a for a in apps if affected(a)]
 
-          selected = [{k: v for k, v in a.items() if k != "paths"} for a in targets]
+          def strip(a):
+              return {k: v for k, v in a.items() if k not in ("paths", "deploy")}
+          tests = [strip(a) for a in targets]
+          selected = [strip(a) for a in targets if a.get("deploy", True)]
           names = " ".join(a["app"] for a in selected)
+          test_names = " ".join(a["app"] for a in tests)
           print("arquivos alterados:", "todos" if changed is None else len(changed))
+          print("apps a testar:", test_names or "nenhum")
           print("apps a buildar:", names or "nenhum")
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               out.write("matrix=" + json.dumps({"include": selected}) + "\n")
               out.write("apps=" + names + "\n")
+              out.write("test-matrix=" + json.dumps({"include": tests}) + "\n")
+              out.write("test-apps=" + test_names + "\n")
           PY
 
   # Lint + testes de cada app afetado. Bloqueia build e deploy se falhar.
   test:
     name: 🧪 Testes · ${{ matrix.app }}
     needs: plan
-    if: needs.plan.outputs.apps != ''
+    if: needs.plan.outputs.test-apps != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read   # pacotes do NPM_REGISTRY (GitHub Packages)
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.test-matrix) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -346,7 +357,8 @@ jobs:
         run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$IMAGE"
 
   deploy:
-    name: 🚀 Deploy · ${{ github.ref_name == 'main' && 'prod' || 'develop' }}
+    # Nome fixo: job pulado mostra o nome sem avaliar expressões.
+    name: 🚀 Deploy
     needs: [plan, test, build]
     if: >-
       always() && github.event_name != 'pull_request' &&
