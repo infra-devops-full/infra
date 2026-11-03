@@ -81,7 +81,7 @@ backup_store_up() {
     # -ip.bind=0.0.0.0: sem isso ele só escuta no IP que tinha ao subir, e
     # a rede do k3d (ligada depois, e trocada a cada cluster novo) fica sem
     # resposta. -ip=127.0.0.1: master, volume e filer se falam por dentro.
-    docker run -d --name "$c" --restart unless-stopped \
+    docker run -d --name "$c" --restart no \
       --label devops-platform/role=backup \
       -v "$vol:/data" -v "$BACKUP_CONF_DIR/s3.json:/etc/seaweedfs/s3.json:ro" \
       "$BACKUP_IMAGE" server -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 \

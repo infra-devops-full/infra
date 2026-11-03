@@ -37,7 +37,10 @@ DATA_DIR="${DATA_DIR:-$HOME/.devops-lab}"
 # Expande eventual $HOME literal vindo do .env
 DATA_DIR="$(eval echo "$DATA_DIR")"
 K3D_AGENTS="${K3D_AGENTS:-1}"
-export CLUSTER_NAME DATA_DIR K3D_AGENTS
+# Rede do cluster com sub-rede própria: o k3d fixa o IP do server (o etcd
+# guarda esse IP; se mudar, o cluster não volta depois de reiniciar o Mac).
+K3D_SUBNET="${K3D_SUBNET:-172.28.0.0/16}"
+export CLUSTER_NAME DATA_DIR K3D_AGENTS K3D_SUBNET
 
 # shellcheck source=scripts/lib-project.sh
 source "$SCRIPT_DIR/scripts/lib-project.sh"
@@ -95,12 +98,15 @@ else
 
     log_substep "Renderizando k3d-config (envsubst)..."
     RENDERED_K3D="$(mktemp -t k3d-config.XXXXXX.yaml)"
-    envsubst '${CLUSTER_NAME} ${DATA_DIR} ${K3D_AGENTS}' \
+    envsubst '${CLUSTER_NAME} ${DATA_DIR} ${K3D_AGENTS} ${K3D_SUBNET}' \
       < "$INFRA_ROOT/config/k3d-config.tmpl.yaml" > "$RENDERED_K3D"
 
     log_substep "Criando cluster k3d..."
     k3d cluster create --config="$RENDERED_K3D"
     rm -f "$RENDERED_K3D"
+    # Sem auto-restart do Docker nos nodes: depois de reiniciar o Mac quem liga
+    # é o `make start` (ou `make autostart`), na ordem certa. Ver start-cluster.sh.
+    bash "$INFRA_ROOT/scripts/start-cluster.sh" --no-restart-policy
 
     sleep 10
     kubectl get nodes -o wide

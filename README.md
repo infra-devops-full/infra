@@ -475,7 +475,8 @@ make lab-up | lab-status | lab-down   # laboratório de treino (docs/11-treino-q
 make doctor               # confere tokens, variáveis, GitHub e Docker
 make github [PROJECT=<p>] [ARGS=--dry-run|--rotate]  # configura o GitHub dos apps
 make setup | status | destroy
-make start | stop | restart
+make start | stop | restart  # start liga na ordem certa (docs/24-cluster-local.md)
+make autostart | autostart-off  # macOS: cluster sobe sozinho no login
 make projects             # projetos, apps e ambientes descobertos
 make project-apply PROJECT=<p>                 # deps + secrets + hosts de um projeto
 make seal PROJECT=<p> [ENV=<e>]                # gera os SealedSecrets (commitáveis)

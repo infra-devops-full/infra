@@ -1,4 +1,4 @@
-.PHONY: help setup start stop restart destroy status logs k9s grafana prometheus alertmanager argocd alerts gen-observability \
+.PHONY: help setup start stop restart autostart autostart-off destroy status logs k9s grafana prometheus alertmanager argocd alerts gen-observability \
         security trust-ca untrust-ca policies policy-check \
         delivery rollouts promote abort retry lab-canary \
         release rollback \
@@ -37,8 +37,14 @@ setup: ## Setup completo (cluster + ArgoCD + observabilidade + projetos)
 	@chmod +x setup.sh
 	@./setup.sh
 
-start: ## Inicia o cluster (se estiver parado)
-	@k3d cluster start $(CLUSTER_NAME) && echo "$(GREEN)✅ Cluster iniciado$(RESET)"
+start: ## Liga o cluster na ordem certa (também conserta o "subiu pela metade" depois de reiniciar o Mac)
+	@bash scripts/start-cluster.sh
+
+autostart: ## macOS: liga o cluster sozinho a cada login (LaunchAgent, sem sudo)
+	@bash scripts/autostart.sh install
+
+autostart-off: ## macOS: remove o autostart
+	@bash scripts/autostart.sh remove
 
 stop: ## Para o cluster (mantém dados)
 	@k3d cluster stop $(CLUSTER_NAME) && echo "$(YELLOW)✅ Cluster parado$(RESET)"

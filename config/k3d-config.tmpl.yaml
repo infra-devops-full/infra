@@ -1,10 +1,15 @@
 # k3d configuration (template) — renderizado por setup.sh via envsubst.
-# Variáveis: ${CLUSTER_NAME} ${DATA_DIR} ${K3D_AGENTS}
+# Variáveis: ${CLUSTER_NAME} ${DATA_DIR} ${K3D_AGENTS} ${K3D_SUBNET}
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
   name: ${CLUSTER_NAME}
 servers: 1
+# Sub-rede própria = IP FIXO para o server (o k3d só fixa com subnet). O etcd
+# embutido (--cluster-init) usa o IP do server como identidade: IP sorteado
+# mudava a cada reboot e o k3s parava em "not a member of the etcd cluster".
+# Ligar/desligar: make start / make stop (scripts/start-cluster.sh).
+subnet: "${K3D_SUBNET}"
 # Cada node é um k3s inteiro (kubelet + containerd): mais nodes = mais CPU
 # ociosa. Para o lab, 1 server + 1 agent basta. Ajuste com K3D_AGENTS no .env.
 agents: ${K3D_AGENTS}
