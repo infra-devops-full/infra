@@ -1,0 +1,62 @@
+# inventory-service (Spring Boot 4, Java 21) — valores comuns a todos os ambientes.
+# app.name / app.environment / app.project são injetados pelo ArgoCD
+# (a partir do caminho deste arquivo).
+
+image:
+  # Publicada pelo CI do repo whitelabel-store/wlstore-be: Dockerfile da raiz com SERVICE=inventory-service.
+  repository: ghcr.io/whitelabel-store/wlstore-be/inventory-service
+  pullPolicy: IfNotPresent
+
+service:
+  # server.port do application.yaml.
+  port: 8084
+
+# O inventory tem actuator: no Kubernetes o Spring liga sozinho os grupos
+# liveness/readiness (readiness só fica UP depois do Flyway e do contexto no ar).
+livenessProbe:
+  path: /actuator/health/liveness
+  initialDelaySeconds: 60
+  timeoutSeconds: 5
+readinessProbe:
+  path: /actuator/health/readiness
+  initialDelaySeconds: 20
+  timeoutSeconds: 5
+
+# JVM: o heap vai até 75% do limite (JAVA_TOOL_OPTIONS da imagem).
+# CPU alta só no start (JIT + Flyway).
+resources:
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+  requests:
+    cpu: 50m
+    memory: 384Mi
+
+# $(VAR) é expandido pelo Kubernetes com as chaves dos Secrets do envFrom.
+# O banco inventorydb é um extraDbs do mesmo Postgres do projeto.
+env:
+  # Perfil do Spring = ambiente (develop, prod): application-<env>.yaml do app.
+  SPRING_PROFILES_ACTIVE: "{{ .Values.app.environment }}"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/inventorydb"
+  SPRING_DATASOURCE_USERNAME: "$(DB_USER)"
+  SPRING_DATASOURCE_PASSWORD: "$(DB_PASSWORD)"
+  SPRING_RABBITMQ_HOST: "$(RABBITMQ_HOST)"
+  SPRING_RABBITMQ_PORT: "$(RABBITMQ_PORT)"
+  SPRING_RABBITMQ_USERNAME: "$(RABBITMQ_USER)"
+  SPRING_RABBITMQ_PASSWORD: "$(RABBITMQ_PASSWORD)"
+  # O pom traz o client do Eureka, mas no cluster não há discovery-server:
+  # os serviços se acham pelo Service do Kubernetes (http://<app>:<porta>).
+  EUREKA_CLIENT_ENABLED: "false"
+  # trace_id/span_id (o agente OpenTelemetry põe no MDC) em cada linha de log:
+  # no Grafana a linha vira link para o trace. docs/22-tracing.md
+  LOGGING_PATTERN_LEVEL: "%5p [trace_id=%X{trace_id:-} span_id=%X{span_id:-}]"
+
+envFrom:
+  - secretRef: postgres # DB_HOST, DB_PORT, DB_USER, DB_PASSWORD (database no project.yaml)
+  - secretRef: rabbitmq # RABBITMQ_HOST, RABBITMQ_PORT, ... (rabbitmq no project.yaml)
+
+# Traces no Tempo: o OpenTelemetry Operator injeta o agente (Java) no pod,
+# sem mudar o código. docs/22-tracing.md
+tracing:
+  enabled: true
+  language: java

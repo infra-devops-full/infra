@@ -86,7 +86,7 @@ Projetos incluídos:
 | ------- | ---- | ------------ |
 | [`crivo`](projects/crivo) | `crivo-be` (NestJS, :8080), `crivo-fe` (Next.js, :3000) | Postgres, Redis |
 | [`nest-rabbitmq`](projects/nest-rabbitmq) | `products` (NestJS, :3000) | RabbitMQ |
-| [`wlstore`](projects/wlstore) | `catalog-service` (Spring, :8081), `pricing-service` (Spring, :8082), `shell` (Next.js, :3000), `catalog-mfe` (Next.js, :4200), `pricing-mfe` (Next.js, :4300) | Postgres (um banco por serviço), RabbitMQ |
+| [`wlstore`](projects/wlstore) | `catalog-service` (Spring, :8081), `pricing-service` (Spring, :8082), `inventory-service` (Spring, :8084), `shell` (Next.js, :3000), `catalog-mfe` (Next.js, :4200), `pricing-mfe` (Next.js, :4300) | Postgres (um banco por serviço), RabbitMQ |
 
 ---
 
@@ -219,7 +219,7 @@ Variáveis de cada projeto atual:
 | crivo / crivo-be | `PORT`, `NODE_ENV`, `SWAGGER_ENABLED`, `MESSAGING_PROVIDER`, `REMINDER_HOURS_BEFORE`, `PUBLIC_APP_URL`, `CORS_ORIGINS` | `JWT_SECRET`, `JWT_EXPIRES_IN_SECONDS`, `REFRESH_TOKEN_EXPIRES_IN_SECONDS`, `INBOUND_WEBHOOK_TOKEN`, `BULL_BOARD_*`, `EVOLUTION_*`, `META_*`, `DEEPSEEK_*`, `AI_TIMEOUT_MS`, `CLOUDINARY_*`, `STRIPE_*`, `SMTP_*`, `MAIL_FROM` (lista completa em [`example.env`](projects/crivo/secrets/example.env)) | `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` |
 | crivo / crivo-fe | `PORT`, `NODE_ENV` | — | — (a URL da API é embutida no build: `NEXT_PUBLIC_API_URL=http://crivo-be:8080`) |
 | nest-rabbitmq / products | `PORT`, `NODE_ENV` | — | `RABBITMQ_URL`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
-| wlstore / catalog-service, pricing-service | `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, montadas com `$(VAR)` (veja abaixo) | — | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| wlstore / catalog-service, pricing-service, inventory-service | `SPRING_DATASOURCE_*`, `SPRING_RABBITMQ_*`, montadas com `$(VAR)` (veja abaixo) | — | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
 | wlstore / shell, catalog-mfe, pricing-mfe | — | — | — (o roteamento `/` → shell, `/catalog` → catalog-mfe e `/pricing` → pricing-mfe é feito pelo Ingress; veja 4.5) |
 
 **Apps que esperam nomes próprios de variável (ex.: Spring).** Monte a variável

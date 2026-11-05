@@ -4,20 +4,22 @@
 # Nome do projeto = nome da pasta. Apps e ambientes vêm das pastas:
 #   apps/catalog-service/  Spring Boot (porta 8081, banco catalogdb, Flyway)
 #   apps/pricing-service/  Spring Boot (porta 8082, banco pricingdb, Flyway)
+#   apps/inventory-service/ Spring Boot (porta 8084, banco inventorydb, Flyway)
 #   apps/wlstore-fe/       Next.js (porta 3000, em / do host do projeto): loja em /,
 #                          painel do lojista em /painel e checkout em /checkout
-# catalog ↔ pricing trocam eventos pelo RabbitMQ (catalog.events / pricing.events).
+# Os serviços trocam eventos pelo RabbitMQ (catalog.events / pricing.events /
+# inventory.events): o inventory consome product.* e publica stock.changed.
 # → namespaces wlstore-develop / wlstore-prod
 # → front: <env>.wlstore.local
 # → APIs: <env>.<app>.wlstore.local
 #
-# Serviços ainda não implementados (identity, inventory, notification, order,
+# Serviços ainda não implementados (identity, notification, order,
 # payment, discovery-server) ficam de fora: para incluir um, crie
 # apps/<serviço>/ com values.yaml + values-<env>.yaml e o banco em extraDbs.
 # =============================================================================
 
 # Texto do projeto na UI do ArgoCD (AppProject).
-description: "WLStore — e-commerce whitelabel: front Next.js (loja, painel, checkout) + catalog e pricing (Spring)"
+description: "WLStore — e-commerce whitelabel: front Next.js (loja, painel, checkout) + catalog, pricing e inventory (Spring)"
 # Logo no Grafana: avatar da org no GitHub. Para trocar: mude a URL e rode
 # `make logos PROJECT=wlstore` (baixa para logo.png) e commite o PNG.
 logo: https://avatars.githubusercontent.com/u/347498737?v=4
@@ -25,7 +27,7 @@ logo: https://avatars.githubusercontent.com/u/347498737?v=4
 # Repos de código (um por app/time; quem builda é o CI de cada um). Usados
 # pelo `make github` (develop, deploy key, proteção da main) e pelo doctor.
 appRepos:
-  - https://github.com/whitelabel-store/wlstore-be   # catalog-service, pricing-service
+  - https://github.com/whitelabel-store/wlstore-be   # catalog-service, pricing-service, inventory-service
   - https://github.com/whitelabel-store/wlstore-fe   # wlstore-fe
 
 # Um Postgres por ambiente, um banco por serviço (database per service).
@@ -35,6 +37,7 @@ database:
   defaultDb: catalogdb
   extraDbs:
     - pricingdb
+    - inventorydb
   # 1 instância também em prod: o Docker desta máquina (16 GB) não aguenta
   # réplica em todos os bancos. Com folga, 2 = failover automático.
   instances:
