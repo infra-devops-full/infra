@@ -116,7 +116,12 @@ for NS in $NAMESPACES; do
   fi
   if project_rabbitmq_enabled "$PROJ"; then
     step "RabbitMQ em $NS"
-    bash "$SCRIPT_DIR/setup-rabbitmq.sh" --namespace "$NS"
+    RMQ_UI_ARGS=()
+    if project_rabbitmq_ui "$PROJ"; then
+      RMQ_UI_ARGS=(--host "$(project_rabbitmq_host "$PROJ" "${NS#"$PROJ"-}")"
+                   --allowed-groups "$(project_access_groups "$PROJ")")
+    fi
+    bash "$SCRIPT_DIR/setup-rabbitmq.sh" --namespace "$NS" "${RMQ_UI_ARGS[@]}"
   fi
 done
 

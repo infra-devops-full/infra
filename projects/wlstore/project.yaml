@@ -45,6 +45,10 @@ database:
 
 # RabbitMQ por ambiente → Secret `rabbitmq` (RABBITMQ_HOST, RABBITMQ_PORT,
 # RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_URL).
+# Painel web (filas, DLQs, "Get messages"): https://develop.rabbitmq.wlstore.local
+# e https://rabbitmq.wlstore.local (prod), com SSO (admins + access.devs) e
+# depois a senha do RabbitMQ: make rabbitmq-login PROJECT=wlstore ENV=develop.
+# ui: false desliga o Ingress (fica só o port-forward).
 rabbitmq:
   enabled: true
   user: wlstore

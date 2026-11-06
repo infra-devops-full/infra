@@ -9,20 +9,28 @@
 #   - ServiceMonitor (dashboard "Infra / RabbitMQ" no Grafana)
 #   - Deployment rabbitmq com emptyDir (volátil — mesmo trade-off do Postgres)
 #
+#   - Ingress do painel web (opcional, --host): HTTPS com a CA da plataforma
+#     e, com --allowed-groups, login do SSO na frente (oauth2-proxy). Depois
+#     do SSO o RabbitMQ pede o usuário/senha dele: make rabbitmq-login.
+#
 # As apps consomem a conexão via envFrom: [{ secretRef: rabbitmq }].
-# Management UI: kubectl port-forward -n <ns> svc/rabbitmq 15672:15672
+# Management UI sem Ingress: kubectl port-forward -n <ns> svc/rabbitmq 15672:15672
 #
 # Uso:
-#   ./scripts/setup-rabbitmq.sh --namespace <ns>
+#   ./scripts/setup-rabbitmq.sh --namespace <ns> [--host <h> [--allowed-groups <g1,g2>]]
 # =============================================================================
 
 set -euo pipefail
 
 NS=""
+HOST=""
+ALLOWED_GROUPS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --namespace) NS="$2"; shift 2 ;;
+    --host) HOST="$2"; shift 2 ;;
+    --allowed-groups) ALLOWED_GROUPS="$2"; shift 2 ;;
     *) echo "Argumento desconhecido: $1"; exit 1 ;;
   esac
 done
@@ -139,6 +147,50 @@ spec:
             sizeLimit: 1Gi
 EOF
 
+# Painel web no Ingress. Sem o ingress-nginx (cluster mínimo), fica só o
+# port-forward. A NetworkPolicy allow-from-ingress-nginx do namespace já libera.
+if [[ -n "$HOST" ]] && kubectl get ingressclass nginx >/dev/null 2>&1; then
+  AUTH_ANN=""
+  # SSO só se o oauth2-proxy existir (make sso); sem ele, o login do RabbitMQ.
+  if [[ -n "$ALLOWED_GROUPS" ]] && kubectl get svc oauth2-proxy -n auth >/dev/null 2>&1; then
+    AUTH_ANN="    nginx.ingress.kubernetes.io/auth-url: \"http://oauth2-proxy.auth.svc.cluster.local/oauth2/auth?allowed_groups=${ALLOWED_GROUPS}\"
+    nginx.ingress.kubernetes.io/auth-signin: \"https://oauth2.devops.local/oauth2/start?rd=\$scheme://\$host\$escaped_request_uri\"
+    nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-Request-User,X-Auth-Request-Email"
+  fi
+  cat <<EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rabbitmq
+  namespace: ${NS}
+  labels:
+    app: rabbitmq
+  annotations:
+    cert-manager.io/cluster-issuer: platform-ca
+    cert-manager.io/usages: digital signature,key encipherment,server auth
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+${AUTH_ANN}
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [${HOST}]
+      secretName: rabbitmq-tls
+  rules:
+    - host: ${HOST}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rabbitmq
+                port:
+                  name: management
+EOF
+elif [[ -z "$HOST" ]]; then
+  kubectl delete ingress rabbitmq -n "$NS" --ignore-not-found >/dev/null
+fi
+
 echo "⏳ Aguardando rabbitmq ficar pronto..."
 kubectl rollout status -n "$NS" deploy/rabbitmq --timeout=180s
-echo "✅ RabbitMQ pronto em $NS"
+echo "✅ RabbitMQ pronto em $NS${HOST:+ — painel: https://$HOST}"

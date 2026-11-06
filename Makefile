@@ -260,6 +260,10 @@ db-restore-test: ## Testa o backup: restaura numa cópia, compara com o banco em
 db-psql: ## psql no primário. Uso: make db-psql PROJECT=<p> ENV=<e> [DB=<banco>]
 	@./scripts/db.sh psql "$(PROJECT)" "$(ENV)" "$(DB)"
 
+rabbitmq-login: ## URL, usuário e senha do painel do RabbitMQ. Uso: make rabbitmq-login PROJECT=<p> ENV=<e>
+	@if [ -z "$(PROJECT)" ] || [ -z "$(ENV)" ]; then echo "$(YELLOW)⚠️  Uso: make rabbitmq-login PROJECT=<p> ENV=<e>$(RESET)"; exit 1; fi
+	@./scripts/rabbitmq-login.sh "$(PROJECT)" "$(ENV)"
+
 project-apply: ## Prepara UM projeto no cluster (deps, secrets) + /etc/hosts. Uso: make project-apply PROJECT=<p>
 	@if [ -z "$(PROJECT)" ]; then echo "$(YELLOW)⚠️  Uso: make project-apply PROJECT=<nome>$(RESET)"; exit 1; fi
 	@./scripts/apply-project.sh $(PROJECT)
