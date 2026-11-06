@@ -15,10 +15,17 @@ PROJ="${1:?Uso: $0 <projeto> <ambiente>}"
 ENV_NAME="${2:?Uso: $0 <projeto> <ambiente>}"
 NS="${PROJ}-${ENV_NAME}"
 
+if ! project_rabbitmq_enabled "$PROJ"; then
+  echo "❌ $PROJ não tem rabbitmq.enabled no project.yaml"; exit 1
+fi
+if ! grep -qx "$ENV_NAME" <(project_envs "$PROJ"); then
+  echo "❌ ambiente '$ENV_NAME' não existe em $PROJ (há: $(project_envs "$PROJ" | xargs))"; exit 1
+fi
+
 secret() { kubectl -n "$NS" get secret rabbitmq -o jsonpath="{.data.$1}" | base64 -d; }
 
 if project_rabbitmq_ui "$PROJ"; then
-  echo "URL:     https://$(project_rabbitmq_host "$PROJ" "$ENV_NAME")  (antes: login do GitHub)"
+  echo "URL:     https://$RABBITMQ_UI_HOST/$NS/  (antes: login do GitHub)"
 else
   echo "URL:     http://localhost:15672  (kubectl -n $NS port-forward svc/rabbitmq 15672:15672)"
 fi

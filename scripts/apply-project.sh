@@ -118,12 +118,18 @@ for NS in $NAMESPACES; do
     step "RabbitMQ em $NS"
     RMQ_UI_ARGS=()
     if project_rabbitmq_ui "$PROJ"; then
-      RMQ_UI_ARGS=(--host "$(project_rabbitmq_host "$PROJ" "${NS#"$PROJ"-}")"
+      RMQ_UI_ARGS=(--host "$RABBITMQ_UI_HOST"
                    --allowed-groups "$(project_access_groups "$PROJ")")
     fi
     bash "$SCRIPT_DIR/setup-rabbitmq.sh" --namespace "$NS" "${RMQ_UI_ARGS[@]}"
   fi
 done
+
+# Seletor de ambiente do painel do RabbitMQ (lista TODOS os projetos).
+if project_rabbitmq_ui "$PROJ"; then
+  step "Painel do RabbitMQ (https://$RABBITMQ_UI_HOST)"
+  bash "$SCRIPT_DIR/setup-rabbitmq-portal.sh"
+fi
 
 # 4. ghcr-secret --------------------------------------------------------------
 if [[ -n "${GITHUB_TOKEN:-}" && "${GITHUB_TOKEN}" != ghp_your_github_token_here ]]; then

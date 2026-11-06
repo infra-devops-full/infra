@@ -9,9 +9,14 @@
 #   - ServiceMonitor (dashboard "Infra / RabbitMQ" no Grafana)
 #   - Deployment rabbitmq com emptyDir (volátil — mesmo trade-off do Postgres)
 #
-#   - Ingress do painel web (opcional, --host): HTTPS com a CA da plataforma
-#     e, com --allowed-groups, login do SSO na frente (oauth2-proxy). Depois
-#     do SSO o RabbitMQ pede o usuário/senha dele: make rabbitmq-login.
+#   - Painel web (opcional, --host): o management UI vai para o caminho
+#     /<ns>/ do host (management.path_prefix) e ganha um Ingress só desse
+#     caminho, com HTTPS da CA da plataforma e, com --allowed-groups, o SSO
+#     na frente (oauth2-proxy). Todos os ambientes dividem o mesmo host
+#     (rabbitmq.devops.local); a raiz é o seletor de ambiente
+#     (setup-rabbitmq-portal.sh). Depois do SSO o RabbitMQ pede o
+#     usuário/senha dele: make rabbitmq-login.
+#     O host precisa ser *.devops.local: é o domínio do cookie do SSO.
 #
 # As apps consomem a conexão via envFrom: [{ secretRef: rabbitmq }].
 # Management UI sem Ingress: kubectl port-forward -n <ns> svc/rabbitmq 15672:15672
@@ -45,6 +50,25 @@ kubectl get secret rabbitmq -n "$NS" >/dev/null 2>&1 || {
   echo "❌ Secret rabbitmq não existe em $NS — rode \`make seal PROJECT=<p>\` e \`make project-apply PROJECT=<p>\`"
   exit 1
 }
+
+# Caminho do painel: /<ns> com --host (vários ambientes num host só), raiz
+# sem ele (port-forward). Vai num conf.d do RabbitMQ; o hash entra no pod
+# para que mudar o caminho recrie o pod.
+PATH_PREFIX=""
+[[ -n "$HOST" ]] && PATH_PREFIX="/${NS}"
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: ${NS}
+  labels:
+    app: rabbitmq
+data:
+  90-platform.conf: |
+${PATH_PREFIX:+    management.path_prefix = ${PATH_PREFIX}}
+EOF
+CONFIG_SUM="$(printf '%s' "$PATH_PREFIX" | shasum -a 256 | cut -c1-16)"
 
 # Hash do Secret no template do pod: se a senha mudar (make seal), o
 # Deployment muda e o Kubernetes recria o pod com a credencial nova.
@@ -116,6 +140,7 @@ spec:
         app: rabbitmq
       annotations:
         devops-platform/secret-checksum: "${SECRET_SUM}"
+        devops-platform/config-checksum: "${CONFIG_SUM}"
     spec:
       containers:
         - name: rabbitmq
@@ -141,10 +166,16 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/rabbitmq
+            - name: config
+              mountPath: /etc/rabbitmq/conf.d/90-platform.conf
+              subPath: 90-platform.conf
       volumes:
         - name: data
           emptyDir:
             sizeLimit: 1Gi
+        - name: config
+          configMap:
+            name: rabbitmq-config
 EOF
 
 # Painel web no Ingress. Sem o ingress-nginx (cluster mínimo), fica só o
@@ -179,7 +210,7 @@ spec:
     - host: ${HOST}
       http:
         paths:
-          - path: /
+          - path: ${PATH_PREFIX}/
             pathType: Prefix
             backend:
               service:
@@ -193,4 +224,4 @@ fi
 
 echo "⏳ Aguardando rabbitmq ficar pronto..."
 kubectl rollout status -n "$NS" deploy/rabbitmq --timeout=180s
-echo "✅ RabbitMQ pronto em $NS${HOST:+ — painel: https://$HOST}"
+echo "✅ RabbitMQ pronto em $NS${HOST:+ — painel: https://$HOST$PATH_PREFIX/}"

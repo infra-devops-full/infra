@@ -101,7 +101,6 @@ project_hosts() {
   local app; for app in $(project_apps "$1"); do
     project_app_in_env "$1" "$app" "$2" && project_app_host "$1" "$app" "$2"
   done
-  if project_rabbitmq_ui "$1"; then project_rabbitmq_host "$1" "$2"; fi
 }
 
 # Hosts extras declarados no project.yaml (ferramentas do projeto etc.).
@@ -127,13 +126,12 @@ project_redis_enabled()  { [[ "$(_pq "$1" '.redis.enabled // false')" == "true" 
 
 project_rabbitmq_enabled()  { [[ "$(_pq "$1" '.rabbitmq.enabled // false')" == "true" ]]; }
 project_rabbitmq_user()     { _pq "$1" '.rabbitmq.user // "guest"'; }
-# Painel web do RabbitMQ no Ingress (rabbitmq.ui, padrão true). Host no mesmo
-# padrão dos apps: develop.rabbitmq.<p>.local; prod sem prefixo.
+# Painel web do RabbitMQ (rabbitmq.ui, padrão true): um host só para todos os
+# projetos e ambientes, um caminho por namespace (/<projeto>-<env>/) e o
+# seletor de ambiente na raiz. *.devops.local: domínio do cookie do SSO.
+RABBITMQ_UI_HOST="rabbitmq.devops.local"
 project_rabbitmq_ui() {
   project_rabbitmq_enabled "$1" && [[ "$(_pq "$1" '.rabbitmq.ui == false')" != "true" ]]
-}
-project_rabbitmq_host() {
-  if [[ "$2" == "prod" ]]; then echo "rabbitmq.$1.local"; else echo "$2.rabbitmq.$1.local"; fi
 }
 # Grupos do SSO que entram nas ferramentas do projeto: admins da plataforma
 # (config/auth/access.yaml) + access.devs do projeto. Separados por vírgula.
