@@ -20,6 +20,7 @@ echo -e "  ${BLUE}ArgoCD:${NC}      http://argocd.devops.local   (admin)"
 ARGOCD_PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "n/d")
 echo "               senha: $ARGOCD_PASS"
 echo -e "  ${BLUE}Grafana:${NC}     http://grafana.devops.local   (admin / devops.local2026)"
+echo -e "  ${BLUE}RabbitMQ:${NC}    https://rabbitmq.devops.local (make rabbitmq-login)"
 echo -e "  ${BLUE}Prometheus:${NC}  http://prometheus.devops.local"
 echo -e "  ${BLUE}AlertMgr:${NC}    http://alertmanager.devops.local"
 echo ""

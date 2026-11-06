@@ -14,8 +14,10 @@
 #     caminho, com HTTPS da CA da plataforma e, com --allowed-groups, o SSO
 #     na frente (oauth2-proxy). Todos os ambientes dividem o mesmo host
 #     (rabbitmq.devops.local); a raiz é o seletor de ambiente
-#     (setup-rabbitmq-portal.sh). Depois do SSO o RabbitMQ pede o
-#     usuário/senha dele: make rabbitmq-login.
+#     (setup-rabbitmq-portal.sh). Depois do SSO o RabbitMQ pede login: um
+#     usuário de painel IGUAL em todos os brokers (RABBITMQ_UI_USER /
+#     RABBITMQ_UI_PASSWORD do .env; padrão admin / devops.local2026, como o
+#     Grafana), separado do usuário das apps. make rabbitmq-login.
 #     O host precisa ser *.devops.local: é o domínio do cookie do SSO.
 #
 # As apps consomem a conexão via envFrom: [{ secretRef: rabbitmq }].
@@ -69,6 +71,21 @@ data:
 ${PATH_PREFIX:+    management.path_prefix = ${PATH_PREFIX}}
 EOF
 CONFIG_SUM="$(printf '%s' "$PATH_PREFIX" | shasum -a 256 | cut -c1-16)"
+
+# Usuário do painel: o mesmo em todos os ambientes (trocar de ambiente no
+# seletor não pede outra senha). Criado pelo postStart do container a cada
+# start (os dados ficam em emptyDir). Sem --host, não existe.
+UI_USER="${RABBITMQ_UI_USER:-admin}"
+UI_PASSWORD="${RABBITMQ_UI_PASSWORD:-devops.local2026}"
+UI_SUM=""
+if [[ -n "$HOST" ]]; then
+  kubectl create secret generic rabbitmq-ui -n "$NS" \
+    --from-literal=RABBITMQ_UI_USER="$UI_USER" --from-literal=RABBITMQ_UI_PASSWORD="$UI_PASSWORD" \
+    --dry-run=client -o yaml | kubectl label --local -f - app=rabbitmq-ui -o yaml | kubectl apply -f - >/dev/null
+  UI_SUM="$(printf '%s:%s' "$UI_USER" "$UI_PASSWORD" | shasum -a 256 | cut -c1-16)"
+else
+  kubectl delete secret rabbitmq-ui -n "$NS" --ignore-not-found >/dev/null
+fi
 
 # Hash do Secret no template do pod: se a senha mudar (make seal), o
 # Deployment muda e o Kubernetes recria o pod com a credencial nova.
@@ -141,6 +158,7 @@ spec:
       annotations:
         devops-platform/secret-checksum: "${SECRET_SUM}"
         devops-platform/config-checksum: "${CONFIG_SUM}"
+        devops-platform/ui-checksum: "${UI_SUM}"
     spec:
       containers:
         - name: rabbitmq
@@ -150,6 +168,34 @@ spec:
               valueFrom: { secretKeyRef: { name: rabbitmq, key: RABBITMQ_USER } }
             - name: RABBITMQ_DEFAULT_PASS
               valueFrom: { secretKeyRef: { name: rabbitmq, key: RABBITMQ_PASSWORD } }
+$(if [[ -n "$HOST" ]]; then cat <<'UI'
+            - name: RABBITMQ_UI_USER
+              valueFrom: { secretKeyRef: { name: rabbitmq-ui, key: RABBITMQ_UI_USER } }
+            - name: RABBITMQ_UI_PASSWORD
+              valueFrom: { secretKeyRef: { name: rabbitmq-ui, key: RABBITMQ_UI_PASSWORD } }
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  # Espera o SERVIDOR criar o .erlang.cookie (o hook roda
+                  # como root: se o rabbitmqctl criar antes, o arquivo fica
+                  # do root e o broker cai com eacces), depois o nó subir, e
+                  # cria/atualiza o usuário do painel. Falhar aqui NÃO
+                  # derruba o broker (a saída do hook não vai para o log);
+                  # conferir: kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl list_users
+                  - >-
+                    i=0; until [ -s /var/lib/rabbitmq/.erlang.cookie ];
+                    do i=$((i+1)); [ $i -ge 60 ] && break; sleep 1; done;
+                    i=0; until rabbitmqctl -q await_startup --timeout 10 >/dev/null 2>&1;
+                    do i=$((i+1)); [ $i -ge 30 ] && break; sleep 2; done;
+                    { { rabbitmqctl -q add_user "$RABBITMQ_UI_USER" "$RABBITMQ_UI_PASSWORD" 2>/dev/null ||
+                        rabbitmqctl -q change_password "$RABBITMQ_UI_USER" "$RABBITMQ_UI_PASSWORD"; } &&
+                      rabbitmqctl -q set_user_tags "$RABBITMQ_UI_USER" administrator &&
+                      rabbitmqctl -q set_permissions -p / "$RABBITMQ_UI_USER" ".*" ".*" ".*"; } || true
+UI
+fi)
           ports:
             - containerPort: 5672
             - containerPort: 15672

@@ -273,7 +273,7 @@ make projects        # projetos, apps e ambientes descobertos
 | Grafana | https://grafana.devops.local | `admin` / `devops.local2026` |
 | Prometheus | https://prometheus.devops.local | — |
 | AlertManager | https://alertmanager.devops.local | — |
-| RabbitMQ (todos os projetos, select de ambiente) | https://rabbitmq.devops.local | GitHub (SSO) e depois `make rabbitmq-login PROJECT=<p> ENV=<e>` |
+| RabbitMQ (todos os projetos, select de ambiente) | https://rabbitmq.devops.local | GitHub (SSO) e depois `admin` / `devops.local2026` (`RABBITMQ_UI_*` do `.env`; `make rabbitmq-login`) |
 
 http também responde. Para o navegador não avisar no https, rode
 `make trust-ca` uma vez (ver seção 14).
@@ -513,7 +513,7 @@ Nos atalhos, `SERVICE` é o nome do app (a pasta em `apps/`, por exemplo
 | Reiniciar app / reler env e secrets | `make rollout SERVICE=crivo-be NAMESPACE=crivo-develop` | `kubectl rollout restart deploy/crivo-be -n crivo-develop` |
 | Shell no container | `make shell SERVICE=crivo-be NAMESPACE=crivo-develop` | `kubectl exec -it -n crivo-develop deploy/crivo-be -- sh` |
 | Acessar Postgres local | `make pf SERVICE=postgres NAMESPACE=crivo-develop PORT=5432 LOCAL=5433` | `kubectl port-forward -n crivo-develop svc/postgres 5433:5432` |
-| UI do RabbitMQ | https://rabbitmq.devops.local (select de ambiente); senha: `make rabbitmq-login PROJECT=wlstore ENV=develop` | `kubectl port-forward -n wlstore-develop svc/rabbitmq 15672:15672` → http://localhost:15672/wlstore-develop/ |
+| UI do RabbitMQ | https://rabbitmq.devops.local (select de ambiente); login: `make rabbitmq-login` | `kubectl port-forward -n wlstore-develop svc/rabbitmq 15672:15672` → http://localhost:15672/wlstore-develop/ |
 | ArgoCD reler o Git agora | `make refresh` (ou `APP=crivo-be-develop`) | `kubectl -n argocd annotate application crivo-be-develop argocd.argoproj.io/refresh=hard --overwrite` |
 | CPU/memória | — | `kubectl top pods -n crivo-develop` (o setup desliga o metrics-server; use o Grafana) |
 

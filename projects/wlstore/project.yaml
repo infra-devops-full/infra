@@ -46,8 +46,8 @@ database:
 # RabbitMQ por ambiente → Secret `rabbitmq` (RABBITMQ_HOST, RABBITMQ_PORT,
 # RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_URL).
 # Painel web (filas, DLQs, "Get messages"): https://rabbitmq.devops.local, com
-# seletor de ambiente; SSO (admins + access.devs) e depois a senha do RabbitMQ:
-# `make rabbitmq-login PROJECT=wlstore ENV=develop`
+# seletor de ambiente; SSO (admins + access.devs) e depois o login do painel,
+# igual em todos os ambientes: `make rabbitmq-login`
 # ui: false desliga o painel (fica só o port-forward).
 rabbitmq:
   enabled: true
